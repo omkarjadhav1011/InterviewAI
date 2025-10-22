@@ -1,29 +1,475 @@
-{% extends 'base.html' %}
-{% block title %}Results{% endblock %}
-{% block content %}
-<h2>Interview Results</h2>
-<canvas id="resultsChart" width="400" height="200"></canvas>
-<div id="resultsList"></div>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-  const results = {{ results|tojson | safe }} || [];
-  (function(){
-    const labels = results.map((r, i)=> `Q${i+1}`);
-    const confidence = results.map(r=> r.result.confidence);
-    const technical = results.map(r=> r.result.technical);
-    const communication = results.map(r=> r.result.communication);
-    const ctx = document.getElementById('resultsChart').getContext('2d');
-    new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [
-          {label: 'Confidence', data: confidence, backgroundColor: 'rgba(75,192,192,0.6)'},
-          {label: 'Technical', data: technical, backgroundColor: 'rgba(153,102,255,0.6)'},
-          {label: 'Communication', data: communication, backgroundColor: 'rgba(255,159,64,0.6)'}
-        ]
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interview Results | MockMinds</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="results-wrapper">
+    <div class="results-header">
+      <div class="emoji-badge">🎯</div>
+      <h1>Interview Performance</h1>
+      <p>Your detailed analysis and metrics</p>
+    </div>
+
+    <div class="stats-overview">
+      <div class="stat-card">
+        <div class="stat-icon">💪</div>
+        <div class="stat-value" id="avgConfidence">0</div>
+        <div class="stat-label">Confidence</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🧠</div>
+        <div class="stat-value" id="avgTechnical">0</div>
+        <div class="stat-label">Technical</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">💬</div>
+        <div class="stat-value" id="avgCommunication">0</div>
+        <div class="stat-label">Communication</div>
+      </div>
+    </div>
+
+    <div class="results-content">
+      <div class="chart-section">
+        <h2>Performance Breakdown</h2>
+        <div id="minimalChart" class="minimal-chart"></div>
+      </div>
+
+      <div class="feedback-section">
+        <h2>Question Analysis</h2>
+        <div id="resultsList" class="feedback-list"></div>
+      </div>
+    </div>
+
+    <div class="actions">
+  <button class="btn btn-primary" onclick="window.location.href='/interview'">
+    <span>🎙️</span>
+    Retake Interview
+  </button>
+  <button class="btn btn-secondary" onclick="window.location.href='/'">
+    <span>🏠</span>
+    Home
+  </button>
+</div>
+
+  <script>
+    // Sample data - replace with actual data
+    const results = [
+      { result: { confidence: 7.5, technical: 8.0, communication: 6.5, feedback: 'Great technical knowledge, work on delivery confidence.' } },
+      { result: { confidence: 8.0, technical: 7.0, communication: 8.5, feedback: 'Excellent communication skills and clear explanations.' } },
+      { result: { confidence: 6.5, technical: 9.0, communication: 7.0, feedback: 'Strong technical answers, consider more concise responses.' } },
+      { result: { confidence: 9.0, technical: 8.5, communication: 9.0, feedback: 'Outstanding performance across all metrics!' } }
+    ];
+
+    if (results.length > 0) {
+      // Calculate averages
+      const avgConfidence = (results.reduce((sum, r) => sum + r.result.confidence, 0) / results.length).toFixed(1);
+      const avgTechnical = (results.reduce((sum, r) => sum + r.result.technical, 0) / results.length).toFixed(1);
+      const avgCommunication = (results.reduce((sum, r) => sum + r.result.communication, 0) / results.length).toFixed(1);
+
+      document.getElementById('avgConfidence').textContent = avgConfidence;
+      document.getElementById('avgTechnical').textContent = avgTechnical;
+      document.getElementById('avgCommunication').textContent = avgCommunication;
+
+      // Create minimal chart
+      const chartDiv = document.getElementById('minimalChart');
+      results.forEach((r, i) => {
+        const questionBlock = document.createElement('div');
+        questionBlock.className = 'question-block';
+        questionBlock.innerHTML = `
+          <div class="question-label">Q${i + 1}</div>
+          <div class="metrics-bars">
+            <div class="metric-row">
+              <span class="metric-name">Confidence</span>
+              <div class="bar-container">
+                <div class="bar bar-confidence" style="width: ${r.result.confidence * 10}%"></div>
+              </div>
+              <span class="metric-score">${r.result.confidence}</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-name">Technical</span>
+              <div class="bar-container">
+                <div class="bar bar-technical" style="width: ${r.result.technical * 10}%"></div>
+              </div>
+              <span class="metric-score">${r.result.technical}</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-name">Communication</span>
+              <div class="bar-container">
+                <div class="bar bar-communication" style="width: ${r.result.communication * 10}%"></div>
+              </div>
+              <span class="metric-score">${r.result.communication}</span>
+            </div>
+          </div>
+        `;
+        chartDiv.appendChild(questionBlock);
+      });
+
+      // Create feedback cards
+      const feedbackDiv = document.getElementById('resultsList');
+      feedbackDiv.innerHTML = results.map((r, i) => `
+        <div class="feedback-card">
+          <div class="feedback-header">
+            <span class="question-number">Question ${i + 1}</span>
+            <span class="overall-score">${((r.result.confidence + r.result.technical + r.result.communication) / 3).toFixed(1)}/10</span>
+          </div>
+          <p class="feedback-text">${r.result.feedback || 'Good effort! Keep practicing for smoother delivery.'}</p>
+        </div>
+      `).join('');
+    }
+  </script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #0a0e27 0%, #1a1d3a 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 40px 20px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .results-wrapper {
+      width: 100%;
+      max-width: 1200px;
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    .results-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .emoji-badge {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      animation: bounce 2s ease-in-out infinite;
+    }
+
+    .results-header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+
+    .results-header p {
+      color: #94a3b8;
+      font-size: 1.1rem;
+      font-weight: 300;
+    }
+
+    .stats-overview {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+
+    .stat-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 32px;
+      text-align: center;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .stat-card:hover {
+      transform: translateY(-5px);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .stat-icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+    }
+
+    .stat-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #60a5fa;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      color: #94a3b8;
+      font-size: 0.95rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .results-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      margin-bottom: 48px;
+    }
+
+    .chart-section, .feedback-section {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 32px;
+      backdrop-filter: blur(10px);
+    }
+
+    .chart-section h2, .feedback-section h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: #f1f5f9;
+    }
+
+    .minimal-chart {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .question-block {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .question-label {
+      font-weight: 600;
+      color: #a78bfa;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+    }
+
+    .metrics-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: 110px 1fr 40px;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .metric-name {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .bar-container {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .bar {
+      height: 100%;
+      border-radius: 10px;
+      transition: width 1s ease-out;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bar::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      animation: shimmer 2s infinite;
+    }
+
+    .bar-confidence {
+      background: linear-gradient(90deg, #06b6d4, #3b82f6);
+    }
+
+    .bar-technical {
+      background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+    }
+
+    .bar-communication {
+      background: linear-gradient(90deg, #ec4899, #f472b6);
+    }
+
+    .metric-score {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      text-align: right;
+    }
+
+    .feedback-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .feedback-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 20px;
+      transition: all 0.3s ease;
+    }
+
+    .feedback-card:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .feedback-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .question-number {
+      font-weight: 600;
+      color: #60a5fa;
+      font-size: 0.9rem;
+    }
+
+    .overall-score {
+      background: linear-gradient(135deg, #10b981, #34d399);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .feedback-text {
+      color: #cbd5e1;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      font-style: italic;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border: none;
+      border-radius: 12px;
+      padding: 16px 32px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-family: inherit;
+    }
+
+    .btn span {
+      font-size: 1.2rem;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 40px rgba(59, 130, 246, 0.4);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
       }
-    });
-  })();
-</script>
-{% endblock %}
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes bounce {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-10px);
+      }
+    }
+
+    @keyframes shimmer {
+      0% {
+        transform: translateX(-100%);
+      }
+      100% {
+        transform: translateX(100%);
+      }
+    }
+
+    @media (max-width: 968px) {
+      .results-content {
+        grid-template-columns: 1fr;
+      }
+
+      .metric-row {
+        grid-template-columns: 100px 1fr 35px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .results-header h1 {
+        font-size: 2rem;
+      }
+
+      .stats-overview {
+        grid-template-columns: 1fr;
+      }
+
+      .btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</body>
+</html>

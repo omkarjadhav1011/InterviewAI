@@ -1,5 +1,3 @@
-
-
 {% extends 'base.html' %}
 {% block title %}Upload Resume | MockMinds{% endblock %}
 
@@ -9,14 +7,14 @@
     <h2>📄 Upload Your Resume</h2>
     <p class="subtitle">Upload your PDF resume to start your AI-powered interview.</p>
 
-    <form id="resumeForm" class="upload-form">
+    <form id="resumeForm" class="upload-form" enctype="multipart/form-data">
       <input type="file" id="resumeFile" accept="application/pdf" required class="file-input">
       <button type="submit" class="upload-btn">Upload</button>
     </form>
 
-    <div id="progress" class="progress-section" style="display:none;">
-      <p>Processing: <span id="progressText"></span></p>
-      <progress id="progressBar" value="0" max="100"></progress>
+    <div id="progress" class="progress-section">
+      <div id="progressBar"></div>
+      <p id="progressText"></p>
     </div>
 
     <div id="keywords" class="keywords-section"></div>
@@ -32,6 +30,7 @@
     justify-content: center;
     align-items: center;
     min-height: 100vh;
+    margin: 0;
   }
 
   .upload-container {
@@ -44,29 +43,36 @@
 
   .upload-card {
     background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(12px);
     border-radius: 20px;
     padding: 40px 50px;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
     text-align: center;
     max-width: 480px;
     width: 100%;
+    animation: fadeIn 0.7s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   h2 {
-    font-size: 1.8rem;
+    font-size: 1.9rem;
     margin-bottom: 10px;
+    color: #fff;
   }
 
   .subtitle {
-    color: #ddd;
-    font-size: 0.95rem;
+    color: #d0d0d0;
+    font-size: 1rem;
     margin-bottom: 25px;
   }
 
   .file-input {
     width: 100%;
-    padding: 12px;
+    padding: 14px;
     border: 2px dashed #4fa3ff;
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.05);
@@ -78,6 +84,7 @@
 
   .file-input:hover {
     background: rgba(255, 255, 255, 0.15);
+    border-color: #70b8ff;
   }
 
   .upload-btn {
@@ -88,32 +95,97 @@
     border-radius: 12px;
     font-size: 1rem;
     cursor: pointer;
-    transition: background 0.3s ease;
+    transition: background 0.3s ease, transform 0.2s;
   }
 
   .upload-btn:hover {
     background: #007bff;
+    transform: translateY(-2px);
   }
 
+  /* Progress Bar Section */
   .progress-section {
+    display: none;
     margin-top: 25px;
     text-align: center;
-  }
-
-  progress {
     width: 100%;
-    height: 15px;
-    border-radius: 10px;
-    margin-top: 10px;
   }
 
+  #progressBar {
+    height: 12px;
+    width: 0%;
+    border-radius: 8px;
+    background: #4fa3ff;
+    transition: width 0.4s ease;
+  }
+
+  #progressText {
+    margin-top: 10px;
+    font-size: 0.95rem;
+    color: #ddd;
+  }
+
+  /* Keywords Section */
   .keywords-section {
-    margin-top: 25px;
-    font-size: 0.9rem;
+    margin-top: 30px;
+    font-size: 0.95rem;
     color: #fff;
+  }
+
+  .keyword-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+    justify-content: center;
+  }
+
+  .keyword {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 6px 12px;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: transform 0.2s, background 0.3s;
+  }
+
+  .keyword:hover {
+    transform: scale(1.05);
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  .start-btn {
+    display: inline-block;
+    margin-top: 20px;
+    background: #43d17d;
+    color: white;
+    padding: 12px 25px;
+    border-radius: 25px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background 0.3s ease, transform 0.2s;
+  }
+
+  .start-btn:hover {
+    background: #36b76a;
+    transform: translateY(-2px);
+  }
+
+  @media (max-width: 600px) {
+    .upload-card {
+      padding: 30px 25px;
+    }
+
+    h2 {
+      font-size: 1.6rem;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+    }
   }
 </style>
 
 <script src="{{ url_for('static', filename='js/resume.js') }}"></script>
 {% endblock %}
-

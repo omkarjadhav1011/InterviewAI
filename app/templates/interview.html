@@ -1,22 +1,147 @@
 {% extends 'base.html' %}
 {% block title %}Interview{% endblock %}
 {% block content %}
-<h2>Interview</h2>
-<div class="interview-grid">
-  <div class="camera">
-    <video id="camera" autoplay playsinline width="320" height="240"></video>
+<style>
+  .interview-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    margin: 2rem auto;
+    padding: 2rem;
+    max-width: 1000px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+  }
+
+  .interview-header {
+    text-align: center;
+  }
+
+  .interview-header h2 {
+    font-size: 2rem;
+    color: #00bcd4;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+
+  .interview-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 2rem;
+    width: 100%;
+    align-items: center;
+  }
+
+  .camera {
+    background: #111;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 0 15px rgba(0, 188, 212, 0.4);
+  }
+
+  video {
+    width: 100%;
+    border-radius: 12px;
+  }
+
+  .center {
+    text-align: center;
+    background: #1b1b1b;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: inset 0 0 15px rgba(0, 188, 212, 0.3);
+  }
+
+  #question-text {
+    font-size: 1.25rem;
+    color: #fff;
+    margin-bottom: 1rem;
+  }
+
+  #transcript, #feedback {
+    color: #ddd;
+    font-size: 0.95rem;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.8rem;
+    border-radius: 8px;
+    margin: 0.5rem 0;
+    min-height: 40px;
+  }
+
+  #progressDisplay {
+    color: #00e676;
+    margin-top: 0.5rem;
+    font-size: 1rem;
+  }
+
+  .controls {
+    margin-top: 1.2rem;
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+  }
+
+  button {
+    background: #00bcd4;
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: 0.3s;
+  }
+
+  button:hover {
+    background: #0097a7;
+    transform: translateY(-2px);
+  }
+
+  button:disabled {
+    background: #444;
+    cursor: not-allowed;
+  }
+
+  @media (max-width: 768px) {
+    .interview-grid {
+      grid-template-columns: 1fr;
+    }
+    .camera, .center {
+      width: 100%;
+    }
+  }
+</style>
+
+<div class="interview-container">
+  <div class="interview-header">
+    <h2>AI Interview Session</h2>
+    <p style="color:#bbb;">Your responses will be analyzed in real-time. Speak clearly and confidently!</p>
   </div>
-  <div class="center">
-    <h3 id="question-text">Waiting for question...</h3>
-    <div id="transcript"></div>
-    <div id="feedback"></div>
-    <div id="progressDisplay">Question <span id="qIndex">0</span> of <span id="qTotal">0</span></div>
-    <div class="controls">
-      <button id="startBtn">Start Speaking</button>
-      <button id="stopBtn" disabled>Stop</button>
-      <button id="nextBtn">Next Question</button>
+
+  <div class="interview-grid">
+    <div class="camera">
+      <video id="camera" autoplay playsinline></video>
+    </div>
+
+    <div class="center">
+      <h3 id="question-text">Waiting for question...</h3>
+      <div id="transcript"></div>
+      <div id="feedback"></div>
+      <div id="progressDisplay">
+        Question <span id="qIndex">0</span> of <span id="qTotal">0</span>
+      </div>
+
+      <div class="controls">
+        <button id="startBtn">🎤 Start Speaking</button>
+        <button id="stopBtn" disabled>🛑 Stop</button>
+        <button id="nextBtn">➡ Next Question</button>
+      </div>
     </div>
   </div>
 </div>
+
 <script src="{{ url_for('static', filename='js/interview.js') }}"></script>
 {% endblock %}
