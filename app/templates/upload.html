@@ -1,0 +1,119 @@
+
+
+{% extends 'base.html' %}
+{% block title %}Upload Resume | MockMinds{% endblock %}
+
+{% block content %}
+<div class="upload-container">
+  <div class="upload-card">
+    <h2>📄 Upload Your Resume</h2>
+    <p class="subtitle">Upload your PDF resume to start your AI-powered interview.</p>
+
+    <form id="resumeForm" class="upload-form">
+      <input type="file" id="resumeFile" accept="application/pdf" required class="file-input">
+      <button type="submit" class="upload-btn">Upload</button>
+    </form>
+
+    <div id="progress" class="progress-section" style="display:none;">
+      <p>Processing: <span id="progressText"></span></p>
+      <progress id="progressBar" value="0" max="100"></progress>
+    </div>
+
+    <div id="keywords" class="keywords-section"></div>
+  </div>
+</div>
+
+<style>
+  body {
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+
+  .upload-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    padding: 30px;
+  }
+
+  .upload-card {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 40px 50px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    max-width: 480px;
+    width: 100%;
+  }
+
+  h2 {
+    font-size: 1.8rem;
+    margin-bottom: 10px;
+  }
+
+  .subtitle {
+    color: #ddd;
+    font-size: 0.95rem;
+    margin-bottom: 25px;
+  }
+
+  .file-input {
+    width: 100%;
+    padding: 12px;
+    border: 2px dashed #4fa3ff;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+    margin-bottom: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .file-input:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .upload-btn {
+    background: #4fa3ff;
+    color: white;
+    padding: 12px 30px;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.3s ease;
+  }
+
+  .upload-btn:hover {
+    background: #007bff;
+  }
+
+  .progress-section {
+    margin-top: 25px;
+    text-align: center;
+  }
+
+  progress {
+    width: 100%;
+    height: 15px;
+    border-radius: 10px;
+    margin-top: 10px;
+  }
+
+  .keywords-section {
+    margin-top: 25px;
+    font-size: 0.9rem;
+    color: #fff;
+  }
+</style>
+
+<script src="{{ url_for('static', filename='js/resume.js') }}"></script>
+{% endblock %}
+

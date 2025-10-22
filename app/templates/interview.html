@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Interview{% endblock %}
+{% block content %}
+<h2>Interview</h2>
+<div class="interview-grid">
+  <div class="camera">
+    <video id="camera" autoplay playsinline width="320" height="240"></video>
+  </div>
+  <div class="center">
+    <h3 id="question-text">Waiting for question...</h3>
+    <div id="transcript"></div>
+    <div id="feedback"></div>
+    <div id="progressDisplay">Question <span id="qIndex">0</span> of <span id="qTotal">0</span></div>
+    <div class="controls">
+      <button id="startBtn">Start Speaking</button>
+      <button id="stopBtn" disabled>Stop</button>
+      <button id="nextBtn">Next Question</button>
+    </div>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/interview.js') }}"></script>
+{% endblock %}
