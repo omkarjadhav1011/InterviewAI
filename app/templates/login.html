@@ -1,14 +1,3 @@
-{% extends 'base.html' %}
-{% block title %}Login{% endblock %}
-{% block content %}
-<h2>Login</h2>
-<form method="post" action="{{ url_for('auth.login') }}">
-  <label>Email: <input name="email" type="email" required></label><br>
-  <label>Password: <input name="password" type="password" required></label><br>
-  <button type="submit">Login</button>
-</form>
-<p>No account? <a href="{{ url_for('auth.register') }}">Register</a></p>
-{% endblock %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -23,7 +12,7 @@
   <div class="auth-wrapper">
     <div class="auth-container">
       <div class="auth-card">
-        <div class="auth-header">
+        <div class="autsh-header">
           <div class="brand-logo">
             <span class="logo-icon">💡</span>
             <span class="logo-text">MockMinds</span>
@@ -33,7 +22,7 @@
           <p class="auth-subtitle">Continue your interview preparation</p>
         </div>
 
-        <form method="post" action="/auth/login" class="auth-form">
+        <form method="post" action="/login" class="auth-form">
           <div class="form-group">
             <label for="email" class="form-label">
               <span class="label-icon">📧</span>
@@ -64,7 +53,7 @@
               required
               autocomplete="current-password"
             >
-            <a href="/auth/forgot-password" class="forgot-link">Forgot password?</a>
+            <a href="/forgot-password" class="forgot-link">Forgot password?</a>
           </div>
 
           <button type="submit" class="auth-button">
@@ -76,11 +65,11 @@
         <div class="auth-footer">
           <p class="auth-link-text">
             Don't have an account? 
-            <a href="/auth/register" class="auth-link">Create one</a>
+            <a href="/register" class="auth-link">Create one</a>
           </p>
         </div>
 
-        <div class="divider">
+        <!-- <div class="divider">
           <span class="divider-text">or continue with</span>
         </div>
 
@@ -103,7 +92,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </div> -->
 
   <style>
     * {
