@@ -34,3 +34,5 @@ def extract_keywords(text, top_n=10):
         freq[w] = freq.get(w, 0) + 1
     items = sorted(freq.items(), key=lambda x: x[1], reverse=True)
     return [k for k, _ in items[:top_n]]
+
+
