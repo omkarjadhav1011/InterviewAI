@@ -18,20 +18,25 @@ def create_app(test_config=None):
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
 
-    # register blueprints
+    # -----------------------------
+    # ✅ Register Blueprints
+    # -----------------------------
     from .routes.auth import auth_bp
     from .routes.resume import resume_bp
     from .routes.interview import interview_bp
+    from .routes.transcription import transcription_bp   # 👈 NEW
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(resume_bp)
     app.register_blueprint(interview_bp)
+    app.register_blueprint(transcription_bp)              # 👈 NEW
 
-    # user_loader for Flask-Login (simple default)
+    # -----------------------------
+    # ✅ Flask-Login User Loader
+    # -----------------------------
     from bson.objectid import ObjectId
     @login_manager.user_loader
     def load_user(user_id):
-        # Retrieve user by _id from MongoDB
         from pymongo import MongoClient
         MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/interview_app')
         client = MongoClient(MONGO_URI)
