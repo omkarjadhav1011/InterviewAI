@@ -82,6 +82,7 @@
     display: flex;
     justify-content: center;
     gap: 1rem;
+    flex-wrap: wrap;
   }
 
   button {
@@ -128,20 +129,74 @@
 
     <div class="center">
       <h3 id="question-text">Waiting for question...</h3>
-      <div id="transcript"></div>
+
+      <!-- 🎙️ Transcript Area -->
+      <div id="transcript">
+        <strong>Transcript:</strong>
+        <p id="transcriptText" style="margin-top:5px;">Press start to begin recording...</p>
+      </div>
+
       <div id="feedback"></div>
       <div id="progressDisplay">
         Question <span id="qIndex">0</span> of <span id="qTotal">0</span>
       </div>
 
       <div class="controls">
-        <button id="startBtn">🎤 Start Speaking</button>
-        <button id="stopBtn" disabled>🛑 Stop</button>
+        <button id="startTranscriptionBtn">🎤 Start Speaking</button>
+        <button id="stopTranscriptionBtn" disabled>🛑 Stop</button>
         <button id="nextBtn">➡ Next Question</button>
       </div>
     </div>
   </div>
 </div>
 
+<!-- Existing interview logic -->
 <script src="{{ url_for('static', filename='js/interview.js') }}"></script>
+
+<!-- 🧠 Speech-to-Text Integration -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const startBtn = document.getElementById("startTranscriptionBtn");
+  const stopBtn = document.getElementById("stopTranscriptionBtn");
+  const transcriptText = document.getElementById("transcriptText");
+
+  // Start transcription
+  startBtn.addEventListener("click", async () => {
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    transcriptText.textContent = "Listening... 🎙️";
+
+    try {
+      const res = await fetch("/start_transcription", { method: "POST" });
+      const data = await res.json();
+      if (data.status === "started") {
+        transcriptText.textContent = "Recording started. Speak now...";
+      }
+    } catch (err) {
+      transcriptText.textContent = "Error starting transcription.";
+      console.error(err);
+    }
+  });
+
+  // Stop transcription
+  stopBtn.addEventListener("click", async () => {
+    stopBtn.disabled = true;
+    startBtn.disabled = false;
+    transcriptText.textContent = "Processing your audio...";
+
+    try {
+      const res = await fetch("/stop_transcription", { method: "POST" });
+      const data = await res.json();
+      if (data.status === "stopped") {
+        transcriptText.textContent = data.transcript || "No transcript available.";
+      } else {
+        transcriptText.textContent = "Something went wrong stopping transcription.";
+      }
+    } catch (err) {
+      transcriptText.textContent = "Error stopping transcription.";
+      console.error(err);
+    }
+  });
+});
+</script>
 {% endblock %}
