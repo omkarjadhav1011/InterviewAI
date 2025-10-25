@@ -122,9 +122,15 @@
     <p style="color:#bbb;">Your responses will be analyzed in real-time. Speak clearly and confidently!</p>
   </div>
 
-  <!-- Rendered question list (populated from /get_questions) -->
-  <div style="width:100%; max-width:800px; margin:0 auto 1rem;">
-    <ul id="question-list" style="color:#ddd; list-style:decimal; padding-left:1.2rem;"></ul>
+  <!-- Question Preview Section -->
+  <div class="question-preview" style="width:100%; max-width:800px; margin:0 auto 1rem; background:rgba(0,0,0,0.2); padding:1.5rem; border-radius:12px;">
+    <h3 style="color:#00bcd4; margin-bottom:1rem">Interview Overview</h3>
+    <!-- Skills and questions populated dynamically -->
+    <div id="question-list" style="color:#ddd;">
+      <div class="loading" style="text-align:center; color:#666;">
+        Loading interview content...
+      </div>
+    </div>
   </div>
 
   <div class="interview-grid">

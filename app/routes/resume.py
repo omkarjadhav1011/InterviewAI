@@ -56,24 +56,46 @@ def upload():
 
         try:
             file.save(path)
+            current_app.logger.info('Resume saved to: %s', path)
+            print(f'Resume upload: saved to {path}')
         except Exception as e:
             current_app.logger.exception('Failed to save uploaded file')
             return jsonify({'error': 'could not save file'}), 500
 
         # Parse the saved PDF and extract data. Wrap in try/except to return friendly errors.
         try:
-            text = extract_text_from_pdf(path)
-            skills = extract_skills(text)  # from skill DB
-            keywords = extract_keywords(text)  # broader keywords
+            # Extract skills using the combined helper that merges DB matches and keywords
+            skills = parse_resume_to_skills(path)
+            current_app.logger.info('Extracted %d skills from resume', len(skills))
+            print(f'Resume parsing: found {len(skills)} skills')
 
-            # Persist keywords to user's record (non-blocking in terms of response formatting)
+            # Persist skills to user's record (non-blocking in terms of response formatting)
             try:
-                users.update_one({'email': current_user.email}, {'$set': {'keywords': keywords}})
+                users.update_one(
+                    {'email': current_user.email}, 
+                    {'$set': {'skills': skills}}
+                )
+                # Store in session for immediate use in interview
+                session['skills'] = skills
+                print('Resume skills: stored in session and DB')
             except Exception:
-                current_app.logger.exception('Failed to update user keywords in DB')
+                current_app.logger.exception('Failed to update user skills in DB')
 
-            # Return both keys so frontend can choose
-            return jsonify({'status': 'ok', 'skills': skills, 'keywords': keywords})
+            # Generate initial questions
+            questions = []
+            try:
+                questions = generate_questions(skills, count=5)
+                session['interview_questions'] = questions
+                print(f'Generated {len(questions)} questions from skills')
+            except Exception:
+                current_app.logger.exception('Failed to generate questions')
+
+            return jsonify({
+                'status': 'ok',
+                'skills': skills,
+                'questions': questions,
+                'next': url_for('interview.interview_page')
+            })
         except Exception as e:
             current_app.logger.exception('Error parsing resume')
             return jsonify({'error': 'failed to parse resume'}), 500

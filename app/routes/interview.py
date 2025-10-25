@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify, current_app
+from flask import Blueprint, render_template, request, jsonify, current_app, session
 from flask_login import login_required, current_user
 from ..services.gemini_service import generate_questions, evaluate_answer
 from ..services.vapi_service import tts_synthesize, stt_transcribe
@@ -34,30 +34,42 @@ def api_get_question():
 @interview_bp.route('/get_questions')
 @login_required
 def get_questions():
-    """Return generated questions based on skills stored in session or DB.
-    This endpoint is intended for the interview frontend to fetch questions
-    after a resume upload.
+    """Return interview questions and skills, with the following priority:
+    1. Questions stored in session (from resume upload)
+    2. Generate new questions from session skills
+    3. Generate questions from DB skills
+    4. Return empty lists if no data available
     """
-    # Prefer session-stored skills (set by /upload_resume)
-    skills = []
-    try:
-        from flask import session
-        skills = session.get('skills', []) or []
-    except Exception:
-        skills = []
-
-    # Fallback to DB-stored keywords
+    # First try to get pre-generated questions from session
+    questions = session.get('interview_questions', [])
+    current_app.logger.debug('Session questions: %s', len(questions) if questions else 0)
+    
+    # Get skills with fallback chain: session -> DB -> empty
+    skills = session.get('skills', [])
     if not skills:
         user_doc = users.find_one({'email': current_user.email})
-        skills = user_doc.get('keywords', []) if user_doc else []
+        if user_doc:
+            skills = user_doc.get('skills', [])
+    current_app.logger.debug('Available skills: %s', len(skills) if skills else 0)
 
-    try:
-        questions = generate_questions(skills, count=7)
-    except Exception:
-        current_app.logger.exception('Failed to generate questions')
-        questions = []
-
-    return jsonify({'questions': questions, 'skills': skills})
+    # If we have skills but no questions, generate them
+    if skills and not questions:
+        try:
+            questions = generate_questions(skills, count=7)
+            # Store in session for consistency
+            session['interview_questions'] = questions
+            current_app.logger.info('Generated %d new questions from %d skills',
+                                  len(questions), len(skills))
+            print(f'Generated {len(questions)} questions from {len(skills)} skills')
+        except Exception:
+            current_app.logger.exception('Failed to generate questions from skills')
+            questions = []
+    
+    return jsonify({
+        'questions': questions,
+        'skills': skills,
+        'source': 'session' if session.get('interview_questions') else 'generated'
+    })
 
 
 @interview_bp.route('/api/tts', methods=['POST'])

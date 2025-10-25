@@ -2,16 +2,12 @@
 // Combined interview.js with real-time transcription + AI logic
 // ======================================================
 
-// HTML elements
-const cameraEl = document.getElementById('camera');
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const nextBtn = document.getElementById('nextBtn');
-const questionText = document.getElementById('question-text');
-const transcriptDiv = document.getElementById('transcript');
-const feedbackDiv = document.getElementById('feedback');
-const qIndex = document.getElementById('qIndex');
-const qTotal = document.getElementById('qTotal');
+// HTML elements - moved to DOMContentLoaded for reliability
+let questionText;
+let transcriptDiv;
+let feedbackDiv;
+let qIndex;
+let qTotal;
 
 // Global state
 let questions = [];
@@ -41,42 +37,72 @@ async function initCamera() {
 // ======================================================
 async function loadQuestions() {
   try {
-    const res = await fetch('/api/get_question');
+    // First try to get questions from /get_questions (session-backed)
+    const res = await fetch('/get_questions');
     const data = await res.json();
-    questions = data.questions || [];
+    
+    // If we got questions from session, use those
+    if (data.questions && data.questions.length > 0) {
+      questions = data.questions;
+      console.log(`Loaded ${questions.length} questions from session`);
+    } else {
+      // Fallback to generating new questions via /api/get_question
+      const fallbackRes = await fetch('/api/get_question');
+      const fallbackData = await fallbackRes.json();
+      questions = fallbackData.questions || [];
+      console.log(`Generated ${questions.length} new questions as fallback`);
+    }
+
+    // Update UI
     qTotal.innerText = questions.length;
     current = 0;
     showQuestion();
   } catch (err) {
     console.error("Error loading questions:", err);
+    questionText.innerText = "Error loading questions. Please try refreshing the page.";
   }
 }
 
 
-// New: Fetch questions from the session-backed endpoint `/get_questions` and
-// render them into a simple <ul id="question-list"> if present on the page.
-async function fetchAndRenderQuestions() {
+// New: Initialize or restore interview state and render preview
+async function initializeInterviewState() {
   try {
     const res = await fetch('/get_questions');
-    if (!res.ok) return;
+    if (!res.ok) throw new Error('Failed to fetch questions');
+    
     const data = await res.json();
     const serverQuestions = data.questions || [];
+    const skills = data.skills || [];
 
-    // If an unordered list exists, render the questions there
+    // Update question preview list if it exists
     const list = document.getElementById('question-list');
     if (list && Array.isArray(serverQuestions)) {
-      list.innerHTML = serverQuestions.map(q => `<li>${q}</li>`).join('');
+      // Show both skills and questions in the preview
+      list.innerHTML = `
+        ${skills.length ? `<div class="skills-preview" style="margin-bottom:1rem">
+          <strong>Skills Identified:</strong>
+          <p style="color:#4caf50">${skills.join(', ')}</p>
+        </div>` : ''}
+        <strong>Questions:</strong>
+        ${serverQuestions.map(q => `<li>${q}</li>`).join('')}
+      `;
     }
 
-    // Also set the in-memory questions array used by the existing interview flow
+    // Initialize the interview state
     if (Array.isArray(serverQuestions) && serverQuestions.length) {
       questions = serverQuestions;
       if (qTotal) qTotal.innerText = questions.length;
       current = 0;
       showQuestion();
+      console.log(`Interview initialized with ${questions.length} questions based on ${skills.length} skills`);
+    } else {
+      console.log('No pre-generated questions found, will fall back to generation');
+      loadQuestions(); // Fallback to question generation
     }
   } catch (err) {
-    console.error('Error fetching session questions:', err);
+    console.error('Error initializing interview:', err);
+    // Fallback to question generation on error
+    loadQuestions();
   }
 }
 
@@ -227,12 +253,39 @@ nextBtn.addEventListener('click', () => {
 });
 
 // ======================================================
-// 🎬 EVENT LISTENERS
+// 🎬 INITIALIZATION AND EVENT LISTENERS
 // ======================================================
-startBtn.addEventListener('click', startRecording);
-stopBtn.addEventListener('click', stopRecording);
 
 // Initialize on page load
-initCamera();
-// Try to fetch questions from session/DB-backed endpoint first
-fetchAndRenderQuestions();
+document.addEventListener('DOMContentLoaded', async () => {
+  // Get UI elements after DOM is ready
+  const cameraEl = document.getElementById('camera');
+  const startBtn = document.getElementById('startTranscriptionBtn');
+  const stopBtn = document.getElementById('stopTranscriptionBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  
+  // Initialize other UI element references
+  questionText = document.getElementById('question-text');
+  transcriptDiv = document.getElementById('transcript');
+  feedbackDiv = document.getElementById('feedback');
+  qIndex = document.getElementById('qIndex');
+  qTotal = document.getElementById('qTotal');
+
+  if (!startBtn || !stopBtn || !nextBtn) {
+    console.error('Required UI elements not found. Check IDs in HTML.');
+    return;
+  }
+
+  // Attach event listeners
+  startBtn.addEventListener('click', startRecording);
+  stopBtn.addEventListener('click', stopRecording);
+  nextBtn.addEventListener('click', () => {
+    current++;
+    showQuestion();
+  });
+
+  // Initialize camera and questions
+  await initCamera();
+  await initializeInterviewState();
+  console.log('Interview page initialized successfully');
+});
