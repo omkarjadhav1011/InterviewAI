@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 env/
 venv/
+.venv_new/
 
 # Uploads
 app/static/uploads/
