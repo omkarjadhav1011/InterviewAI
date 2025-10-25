@@ -1,0 +1,10 @@
+# create & activate venv
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# upgrade pip and install required libraries
+pip install --upgrade pip
+pip install Flask Flask-Login pymongo PyMuPDF spacy google-generativeai python-dotenv requests
+
+# install spaCy English model
+python -m spacy download en_core_web_sm

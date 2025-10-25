@@ -52,6 +52,34 @@ async function loadQuestions() {
   }
 }
 
+
+// New: Fetch questions from the session-backed endpoint `/get_questions` and
+// render them into a simple <ul id="question-list"> if present on the page.
+async function fetchAndRenderQuestions() {
+  try {
+    const res = await fetch('/get_questions');
+    if (!res.ok) return;
+    const data = await res.json();
+    const serverQuestions = data.questions || [];
+
+    // If an unordered list exists, render the questions there
+    const list = document.getElementById('question-list');
+    if (list && Array.isArray(serverQuestions)) {
+      list.innerHTML = serverQuestions.map(q => `<li>${q}</li>`).join('');
+    }
+
+    // Also set the in-memory questions array used by the existing interview flow
+    if (Array.isArray(serverQuestions) && serverQuestions.length) {
+      questions = serverQuestions;
+      if (qTotal) qTotal.innerText = questions.length;
+      current = 0;
+      showQuestion();
+    }
+  } catch (err) {
+    console.error('Error fetching session questions:', err);
+  }
+}
+
 // ======================================================
 // 🗣 SHOW CURRENT QUESTION (with TTS playback)
 // ======================================================
@@ -206,4 +234,5 @@ stopBtn.addEventListener('click', stopRecording);
 
 // Initialize on page load
 initCamera();
-loadQuestions();
+// Try to fetch questions from session/DB-backed endpoint first
+fetchAndRenderQuestions();

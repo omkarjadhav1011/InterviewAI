@@ -138,3 +138,29 @@ def parse_resume(pdf_path: str) -> Dict:
         "projects": sections["projects"] or "Not found",
         "keywords": keywords
     }
+
+
+def parse_resume_to_skills(file_path: str) -> List[str]:
+    """
+    Convenience wrapper for routes: given a resume file path, return a
+    normalized list of skills suitable for downstream usage (e.g. prompting an
+    LLM). It combines explicit SKILLS_DB matches with the top keywords and
+    returns a de-duplicated, title-cased list of skills.
+    """
+    data = parse_resume(file_path)
+    skills = data.get('skills', []) or []
+    keywords = data.get('keywords', []) or []
+
+    # Merge and normalize, prefer explicit skills first
+    merged = []
+    for s in skills + keywords:
+        if not s or not isinstance(s, str):
+            continue
+        normalized = s.strip()
+        # Title case common multi-word skills (e.g., 'machine learning')
+        normalized = ' '.join([w.capitalize() for w in normalized.split()])
+        if normalized not in merged:
+            merged.append(normalized)
+
+    # Limit to reasonable number
+    return merged[:30]

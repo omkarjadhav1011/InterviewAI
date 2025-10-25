@@ -31,6 +31,35 @@ def api_get_question():
     return jsonify({'questions': q})
 
 
+@interview_bp.route('/get_questions')
+@login_required
+def get_questions():
+    """Return generated questions based on skills stored in session or DB.
+    This endpoint is intended for the interview frontend to fetch questions
+    after a resume upload.
+    """
+    # Prefer session-stored skills (set by /upload_resume)
+    skills = []
+    try:
+        from flask import session
+        skills = session.get('skills', []) or []
+    except Exception:
+        skills = []
+
+    # Fallback to DB-stored keywords
+    if not skills:
+        user_doc = users.find_one({'email': current_user.email})
+        skills = user_doc.get('keywords', []) if user_doc else []
+
+    try:
+        questions = generate_questions(skills, count=7)
+    except Exception:
+        current_app.logger.exception('Failed to generate questions')
+        questions = []
+
+    return jsonify({'questions': questions, 'skills': skills})
+
+
 @interview_bp.route('/api/tts', methods=['POST'])
 @login_required
 def api_tts():
