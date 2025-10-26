@@ -51,11 +51,18 @@ def generate_questions(skills: List[str], count: int = 7) -> List[str]:
             # ✅ Updated model name
             model = genai.GenerativeModel("models/gemini-2.0-flash")
 
+            # prompt = (
+            #     f"Generate {count} concise, varied technical interview questions "
+            #     f"for a candidate skilled in {', '.join(skills)}. "
+            #     "Return only the questions, one per line, no numbering or extra text."
+            # )
             prompt = (
-                f"Generate {count} concise, varied technical interview questions "
-                f"for a candidate skilled in {', '.join(skills)}. "
-                "Return only the questions, one per line, no numbering or extra text."
-            )
+                    f"Generate {count} concise, varied basic level technical interview questions "
+                     f"for a candidate skilled in {', '.join(skills)}. "
+                         "Focus on testing practical understanding and core concepts. "
+                        "Return only the questions, one per line, with no numbering or extra text."
+                    )
+
 
             print("Gemini: Sending API request...")
             response = model.generate_content(prompt)
