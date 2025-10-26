@@ -3,10 +3,15 @@
 // ======================================================
 
 // HTML elements - moved to DOMContentLoaded for reliability
+let cameraEl;
+let startBtn;
+let stopBtn;
+let nextBtn;
 let questionText;
 let transcriptDiv;
 let feedbackDiv;
 let qIndex;
+let transcriptText;
 let qTotal;
 
 // Global state
@@ -246,11 +251,8 @@ async function stopRecording() {
 
 // ======================================================
 // ⏭ NEXT QUESTION
+// (event listener attached after DOM ready)
 // ======================================================
-nextBtn.addEventListener('click', () => {
-  current++;
-  showQuestion();
-});
 
 // ======================================================
 // 🎬 INITIALIZATION AND EVENT LISTENERS
@@ -259,10 +261,10 @@ nextBtn.addEventListener('click', () => {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
   // Get UI elements after DOM is ready
-  const cameraEl = document.getElementById('camera');
-  const startBtn = document.getElementById('startTranscriptionBtn');
-  const stopBtn = document.getElementById('stopTranscriptionBtn');
-  const nextBtn = document.getElementById('nextBtn');
+  cameraEl = document.getElementById('camera');
+  startBtn = document.getElementById('startTranscriptionBtn');
+  stopBtn = document.getElementById('stopTranscriptionBtn');
+  nextBtn = document.getElementById('nextBtn');
   
   // Initialize other UI element references
   questionText = document.getElementById('question-text');
@@ -285,7 +287,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Initialize camera and questions
+  // Show loader while initializing (fetching/generating questions)
+  const loader = document.getElementById('interviewLoader');
+  if (loader) loader.style.display = 'flex';
+
   await initCamera();
   await initializeInterviewState();
+
+  // Hide loader after initialization
+  if (loader) loader.style.display = 'none';
   console.log('Interview page initialized successfully');
 });

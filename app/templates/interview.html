@@ -133,6 +133,14 @@
     </div>
   </div>
 
+  <!-- Full page loader shown while generating/fetching questions -->
+  <div id="interviewLoader" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
+    <div style="text-align:center; color:#fff;">
+      <div style="font-size:28px; margin-bottom:12px;">Generating questions...</div>
+      <div style="font-size:16px; color:#ddd;">This may take a few seconds. Please stay on this page.</div>
+    </div>
+  </div>
+
   <div class="interview-grid">
     <div class="camera">
       <video id="camera" autoplay playsinline></video>
@@ -163,51 +171,5 @@
 
 <!-- Existing interview logic -->
 <script src="{{ url_for('static', filename='js/interview.js') }}"></script>
-
-<!-- 🧠 Speech-to-Text Integration -->
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const startBtn = document.getElementById("startTranscriptionBtn");
-  const stopBtn = document.getElementById("stopTranscriptionBtn");
-  const transcriptText = document.getElementById("transcriptText");
-
-  // Start transcription
-  startBtn.addEventListener("click", async () => {
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    transcriptText.textContent = "Listening... 🎙️";
-
-    try {
-      const res = await fetch("/start_transcription", { method: "POST" });
-      const data = await res.json();
-      if (data.status === "started") {
-        transcriptText.textContent = "Recording started. Speak now...";
-      }
-    } catch (err) {
-      transcriptText.textContent = "Error starting transcription.";
-      console.error(err);
-    }
-  });
-
-  // Stop transcription
-  stopBtn.addEventListener("click", async () => {
-    stopBtn.disabled = true;
-    startBtn.disabled = false;
-    transcriptText.textContent = "Processing your audio...";
-
-    try {
-      const res = await fetch("/stop_transcription", { method: "POST" });
-      const data = await res.json();
-      if (data.status === "stopped") {
-        transcriptText.textContent = data.transcript || "No transcript available.";
-      } else {
-        transcriptText.textContent = "Something went wrong stopping transcription.";
-      }
-    } catch (err) {
-      transcriptText.textContent = "Error stopping transcription.";
-      console.error(err);
-    }
-  });
-});
-</script>
+ 
 {% endblock %}
