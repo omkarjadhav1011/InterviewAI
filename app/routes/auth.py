@@ -6,7 +6,7 @@ import bcrypt
 
 auth_bp = Blueprint('auth', __name__)
 
-# TODO: Use a proper Mongo client config and connection pooling
+# configure MongoDB client
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/interview_app')
 client = MongoClient(MONGO_URI)
 db = client.get_default_database() if client else client['interview_app']
@@ -56,11 +56,6 @@ def login():
 @auth_bp.route('/logout', methods=['GET', 'POST'])
 @login_required
 def logout():
-    """Logs out the current user.
-
-    Accepts GET and POST so templates can use either an anchor link or a form POST.
-    After logout, redirect the user to the login page.
-    """
     logout_user()
     flash('Logged out')
     return redirect(url_for('auth.login'))
