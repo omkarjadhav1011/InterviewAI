@@ -53,9 +53,14 @@ def login():
     return render_template('login.html')
 
 
-@auth_bp.route('/logout')
+@auth_bp.route('/logout', methods=['GET', 'POST'])
 @login_required
 def logout():
+    """Logs out the current user.
+
+    Accepts GET and POST so templates can use either an anchor link or a form POST.
+    After logout, redirect the user to the login page.
+    """
     logout_user()
     flash('Logged out')
     return redirect(url_for('auth.login'))
