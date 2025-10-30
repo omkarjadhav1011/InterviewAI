@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify, current_app, session
+from flask import Blueprint, render_template, request, jsonify, current_app, session, url_for
 from flask_login import login_required, current_user
 from ..services.gemini_service import generate_questions, evaluate_answer
 from ..services.vapi_service import tts_synthesize, stt_transcribe
@@ -40,6 +40,9 @@ def get_questions():
     3. Generate questions from DB skills
     4. Return empty lists if no data available
     """
+    # Get the requested question number (0-based index)
+    question_number = request.args.get('question', type=int, default=0)
+    
     # First try to get pre-generated questions from session
     questions = session.get('interview_questions', [])
     current_app.logger.debug('Session questions: %s', len(questions) if questions else 0)
@@ -55,20 +58,29 @@ def get_questions():
     # If we have skills but no questions, generate them
     if skills and not questions:
         try:
-            questions = generate_questions(skills, count=7)
+            questions = generate_questions(skills, count=5)  # Generate exactly 5 questions
             # Store in session for consistency
             session['interview_questions'] = questions
-            current_app.logger.info('Generated %d new questions from %d skills',
-                                  len(questions), len(skills))
-            print(f'Generated {len(questions)} questions from {len(skills)} skills')
+            current_app.logger.info('Generated %d new questions', len(questions))
+            print(f'Generated {len(questions)} questions')
         except Exception:
             current_app.logger.exception('Failed to generate questions from skills')
             questions = []
     
+    # Return the current question number and total, plus the current question
+    current_question = questions[question_number] if questions and question_number < len(questions) else None
+    
     return jsonify({
-        'questions': questions,
+        'currentQuestion': current_question,
+        'questionNumber': question_number,
+        'totalQuestions': len(questions),
+        'progress': {
+            'current': question_number + 1,
+            'total': 5,
+            'completed': question_number / 5 * 100
+        },
         'skills': skills,
-        'source': 'session' if session.get('interview_questions') else 'generated'
+        'isLastQuestion': question_number >= 4  # 0-based index, so 4 is the 5th question
     })
 
 
@@ -99,10 +111,38 @@ def api_evaluate():
     data = request.json
     question = data.get('question')
     answer = data.get('answer')
+    question_number = data.get('questionNumber', 0)
+    
+    # Get evaluation from Gemini
     result = evaluate_answer(question, answer)
-    # store result in user history
-    users.update_one({'email': current_user.email}, {'$push': {'results': {'question': question, 'answer': answer, 'result': result}}})
-    return jsonify({'result': result})
+    
+    # Store in session to track progress
+    session_results = session.get('interview_results', [])
+    session_results.append({
+        'question': question,
+        'answer': answer,
+        'result': result,
+        'questionNumber': question_number
+    })
+    session['interview_results'] = session_results
+    
+    # If this was the last question (5th), store all results in DB
+    if question_number >= 4:  # 0-based index, so 4 is the 5th question
+        users.update_one(
+            {'email': current_user.email},
+            {
+                '$push': {
+                    'results': {
+                        '$each': session_results
+                    }
+                }
+            }
+        )
+        # Clear session results after storing
+        session.pop('interview_results', None)
+        result['redirect'] = url_for('interview.results_page')
+    
+    return jsonify({'result': result, 'questionNumber': question_number})
 
 
 @interview_bp.route('/results')
