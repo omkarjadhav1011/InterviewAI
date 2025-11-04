@@ -48,20 +48,8 @@ def generate_questions(skills: List[str], count: int = 7) -> List[str]:
         try:
             genai.configure(api_key=GEMINI_API_KEY)
 
-            # ✅ Updated model name
             model = genai.GenerativeModel("models/gemini-2.0-flash")
 
-            # prompt = (
-            #     f"Generate {count} concise, varied technical interview questions "
-            #     f"for a candidate skilled in {', '.join(skills)}. "
-            #     "Return only the questions, one per line, no numbering or extra text."
-            # )
-            # prompt = (
-            #         f"Generate {count} concise, varied basic level technical interview questions "
-            #          f"for a candidate skilled in {', '.join(skills)}. "
-            #              "Focus on testing practical understanding and core concepts. "
-            #             "Return only the questions, one per line, with no numbering or extra text."
-            #         )
             prompt = f"""
 You are an AI Interview Assistant designed to conduct realistic, beginner-level job interviews.
 
@@ -69,29 +57,18 @@ Your goal is to simulate a professional yet approachable interview experience, a
 
 **Guidelines:**
 1. Maintain a professional but friendly and encouraging tone to make the candidate comfortable.
-2. Ask **one clear, concise question at a time** — avoid multi-part or overly complex questions.
+2. Ask **one clear, concise question at a time**.
 3. Focus on **basic and intermediate-level** questions that assess **core concepts, understanding, and practical thinking**.
-4. Use the candidate’s previous responses to generate meaningful **follow-up questions**.
-5. Avoid repeating questions unless clarification is needed.
-6. Include both **technical** and **behavioral** aspects relevant to the candidate’s role.
-7. Occasionally **summarize key points** to show active listening.
-8. Adapt follow-up questions based on the candidate’s confidence and knowledge.
-9. Keep responses and questions under **3 sentences**, unless deeper exploration is required.
-10. Always respond in the **same language** as the candidate — detect and maintain language consistency.
-11. Use relevant memory to ensure **continuous and personalized** flow.
-12. Probe deeper using **“why”** or **“how”** questions to explore reasoning.
-13. Ensure that over time, the conversation covers all **important resume sections**.
-14. When generating technical questions for a given skill set, follow this instruction:
+4. Include both **technical** and **behavioral** aspects relevant to the candidate's role.
+5. Keep responses and questions under **3 sentences**, unless deeper exploration is required.
 
-    Generate {count} concise, varied **basic or intermediate-level** technical interview questions 
-    for a candidate skilled in {', '.join(skills)}. 
-    Focus on testing **practical understanding** and **core concepts**. 
+    Generate {count} concise, varied **basic or intermediate-level** technical interview questions
+    for a candidate skilled in {', '.join(skills)}.
+    Focus on testing **practical understanding** and **core concepts**.
     Return only the questions, **one per line**, with **no numbering or extra text**.
 
-Your overall goal is to assess the candidate’s **foundational knowledge, communication skills, and reasoning ability** while maintaining a conversational, encouraging tone.
+Your overall goal is to assess the candidate's **foundational knowledge, communication skills, and reasoning ability** while maintaining a conversational, encouraging tone.
 """
-
-
 
             print("Gemini: Sending API request...")
             response = model.generate_content(prompt)
@@ -106,7 +83,7 @@ Your overall goal is to assess the candidate’s **foundational knowledge, commu
 
         except Exception as e:
             logger.exception("Gemini API call failed; using fallback generator.")
-            print(f"⚠️ Gemini API call failed ({type(e).__name__}): {e}")
+            print(f"Gemini API call failed ({type(e).__name__}): {e}")
 
     # --- Fallback question generator ---
     logger.info("Using fallback question generator.")
@@ -134,7 +111,7 @@ def evaluate_answer(question: str, answer: str) -> dict:
         model = genai.GenerativeModel("models/gemini-2.0-flash")
 
         prompt = f"""
-As an expert technical interviewer, evaluate the following interview response. 
+As an expert technical interviewer, evaluate the following interview response.
 Consider clarity, technical accuracy, and communication skills.
 
 Question: {question}
@@ -159,15 +136,39 @@ Base the scores on:
 
         response = model.generate_content(prompt)
         if hasattr(response, "text") and response.text.strip():
-            import json
+            import json, re
+            text = response.text.strip()
+            # Try direct JSON parse first
             try:
-                evaluation = json.loads(response.text.strip())
-                logger.info("Generated evaluation for answer")
+                evaluation = json.loads(text)
+                logger.info("Generated evaluation for answer (direct JSON parse)")
                 return evaluation
-            except json.JSONDecodeError:
-                logger.error("Failed to parse Gemini evaluation response")
+            except Exception:
+                # Try to extract a JSON-like substring between the first { and the last }
+                start = text.find('{')
+                end = text.rfind('}')
+                if start != -1 and end != -1 and end > start:
+                    candidate = text[start:end+1]
+                    try:
+                        evaluation = json.loads(candidate)
+                        logger.info("Generated evaluation for answer (extracted JSON substring)")
+                        return evaluation
+                    except Exception:
+                        logger.debug('Failed to parse extracted JSON candidate')
+
+                # Some models emit single quotes or minor formatting issues; try a loose fallback
+                try:
+                    candidate2 = text.replace("'", '"')
+                    evaluation = json.loads(candidate2)
+                    logger.info("Generated evaluation for answer (replaced single quotes)")
+                    return evaluation
+                except Exception:
+                    logger.debug('Single-quote replacement parsing failed')
+
+                # Last resort: log the raw response for debugging and use fallback
+                logger.error("Failed to parse Gemini evaluation response; raw text:\n%s", text[:2000])
                 return _fallback_evaluation(question, answer)
-        
+
         return _fallback_evaluation(question, answer)
 
     except Exception as e:
@@ -190,4 +191,3 @@ def _fallback_evaluation(question: str, answer: str) -> dict:
         "strengths": ["Attempted to answer the question"],
         "areas_to_improve": ["Add more technical specifics", "Provide concrete examples"]
     }
-

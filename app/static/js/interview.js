@@ -11,7 +11,6 @@ let questionText;
 let transcriptDiv;
 let feedbackDiv;
 let qIndex;
-let transcriptText;
 let qTotal;
 
 // Global state
@@ -26,11 +25,14 @@ let isRecording = false;
 let evaluationInProgress = false;
 
 // ======================================================
-// 🎥 CAMERA + AUDIO SETUP
+// CAMERA + AUDIO SETUP
 // ======================================================
 async function initCamera() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
     cameraEl.srcObject = stream;
     mediaStream = stream;
   } catch (err) {
@@ -40,31 +42,31 @@ async function initCamera() {
 }
 
 // ======================================================
-// 🧠 LOAD CURRENT QUESTION
+// LOAD CURRENT QUESTION
 // ======================================================
 async function loadCurrentQuestion() {
-    const loader = document.getElementById('interviewLoader');
-    if (loader) loader.style.display = 'flex';
+  const loader = document.getElementById("interviewLoader");
+  if (loader) loader.style.display = "flex";
 
-    try {
-        const res = await fetch(`/get_questions?question=${questionNumber}`);
-        const data = await res.json();
-        
-        if (data.currentQuestion) {
-            currentQuestion = data.currentQuestion;
-            totalQuestions = data.totalQuestions;
-            
-            // Update progress
-            qTotal.innerText = totalQuestions;
-            qIndex.innerText = data.progress.current;
-            
-            // Show the question
-            showQuestion();
-            
-            // Update preview section if exists
-            const previewDiv = document.getElementById('question-list');
-            if (previewDiv) {
-                previewDiv.innerHTML = `
+  try {
+    const res = await fetch(`/get_questions?question=${questionNumber}`);
+    const data = await res.json();
+
+    if (data.currentQuestion) {
+      currentQuestion = data.currentQuestion;
+      totalQuestions = data.totalQuestions;
+
+      // Update progress
+      qTotal.innerText = totalQuestions;
+      qIndex.innerText = data.progress.current;
+
+      // Show the question
+      showQuestion();
+
+      // Update preview section if exists
+      const previewDiv = document.getElementById("question-list");
+      if (previewDiv) {
+        previewDiv.innerHTML = `
                     <div class="progress-bar" style="width: 100%; height: 4px; background: rgba(255,255,255,0.1); margin-bottom: 1rem;">
                         <div style="width: ${data.progress.completed}%; height: 100%; background: #00bcd4; transition: width 0.3s ease;"></div>
                     </div>
@@ -76,105 +78,64 @@ async function loadCurrentQuestion() {
                         <strong>${data.currentQuestion}</strong>
                     </div>
                 `;
-            }
-            
-            // Handle last question state
-            nextBtn.textContent = data.isLastQuestion ? '➡ Finish Interview' : '➡ Next Question';
-            
-        } else {
-            throw new Error('No question received from server');
-        }
-    } catch (err) {
-        console.error("Error loading question:", err);
-        questionText.innerText = "Error loading question. Please try refreshing the page.";
-    } finally {
-        if (loader) loader.style.display = 'none';
-    }
-}
+      }
 
-
-// New: Initialize or restore interview state and render preview
-async function initializeInterviewState() {
-  try {
-    const res = await fetch('/get_questions');
-    if (!res.ok) throw new Error('Failed to fetch questions');
-    
-    const data = await res.json();
-    const serverQuestions = data.questions || [];
-    const skills = data.skills || [];
-
-    // Update question preview list if it exists
-    const list = document.getElementById('question-list');
-    if (list && Array.isArray(serverQuestions)) {
-      // Show both skills and questions in the preview
-      list.innerHTML = `
-        ${skills.length ? `<div class="skills-preview" style="margin-bottom:1rem">
-          <strong>Skills Identified:</strong>
-          <p style="color:#4caf50">${skills.join(', ')}</p>
-        </div>` : ''}
-        <strong>Questions:</strong>
-        ${serverQuestions.map(q => `<li>${q}</li>`).join('')}
-      `;
-    }
-
-    // Initialize the interview state
-    if (Array.isArray(serverQuestions) && serverQuestions.length) {
-      questions = serverQuestions;
-      if (qTotal) qTotal.innerText = questions.length;
-      current = 0;
-      showQuestion();
-      console.log(`Interview initialized with ${questions.length} questions based on ${skills.length} skills`);
+      // Handle last question state
+      nextBtn.textContent = data.isLastQuestion
+        ? "Finish Interview"
+        : "Next Question";
     } else {
-      console.log('No pre-generated questions found, will fall back to generation');
-      loadQuestions(); // Fallback to question generation
+      throw new Error("No question received from server");
     }
   } catch (err) {
-    console.error('Error initializing interview:', err);
-    // Fallback to question generation on error
-    loadQuestions();
+    console.error("Error loading question:", err);
+    questionText.innerText =
+      "Error loading question. Please try refreshing the page.";
+  } finally {
+    if (loader) loader.style.display = "none";
   }
 }
 
 // ======================================================
-// 🗣 SHOW CURRENT QUESTION (with TTS playback)
+// SHOW CURRENT QUESTION (with TTS playback)
 // ======================================================
 function showQuestion() {
-    if (!currentQuestion) {
-        console.error('No current question to display');
-        return;
-    }
+  if (!currentQuestion) {
+    console.error("No current question to display");
+    return;
+  }
 
-    // Reset UI state
-    transcriptDiv.textContent = "Press start to begin recording...";
-    feedbackDiv.textContent = "";
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-    nextBtn.disabled = true;
+  // Reset UI state
+  transcriptDiv.textContent = "Press start to begin recording...";
+  feedbackDiv.textContent = "";
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  nextBtn.disabled = true;
 
-    // Update question text
-    questionText.innerText = currentQuestion;
+  // Update question text
+  questionText.innerText = currentQuestion;
 
-    // Play question via backend TTS or fallback
-    fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: currentQuestion })
+  // Play question via backend TTS or fallback
+  fetch("/api/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: currentQuestion }),
+  })
+    .then((r) => r.json())
+    .then((d) => {
+      if (d.audio_url) {
+        const audio = new Audio(d.audio_url);
+        audio.play();
+      } else {
+        const utterance = new SpeechSynthesisUtterance(currentQuestion);
+        speechSynthesis.speak(utterance);
+      }
     })
-        .then(r => r.json())
-        .then(d => {
-            if (d.audio_url) {
-                const audio = new Audio(d.audio_url);
-                audio.play();
-            } else {
-                const utterance = new SpeechSynthesisUtterance(currentQuestion);
-                speechSynthesis.speak(utterance);
-            }
-        })
-        .catch(err => console.error("TTS error:", err));
+    .catch((err) => console.error("TTS error:", err));
 }
 
 // ======================================================
-// 🎧 START REAL-TIME TRANSCRIPTION
+// START REAL-TIME TRANSCRIPTION
 // ======================================================
 async function startRecording() {
   if (isRecording) return;
@@ -186,13 +147,13 @@ async function startRecording() {
   stopBtn.disabled = false;
 
   try {
-    const response = await fetch('/start_transcription', { method: 'POST' });
+    const response = await fetch("/start_transcription", { method: "POST" });
     const { ws_url } = await response.json();
 
     websocket = new WebSocket(ws_url);
 
     websocket.onopen = () => {
-      console.log("✅ Connected to WebSocket transcription session");
+      console.log("Connected to WebSocket transcription session");
       streamAudioToWebSocket();
     };
 
@@ -203,18 +164,27 @@ async function startRecording() {
 
     websocket.onerror = (err) => {
       console.error("WebSocket error:", err);
+      isRecording = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      transcriptDiv.textContent = "Connection error. Press start to try again.";
     };
 
     websocket.onclose = () => {
-      console.log("🛑 WebSocket closed");
+      console.log("WebSocket closed");
     };
   } catch (err) {
     console.error("Error starting transcription:", err);
+    isRecording = false;
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    transcriptDiv.textContent =
+      "Failed to start transcription. Press start to try again.";
   }
 }
 
 // ======================================================
-// 🎙 STREAM MICROPHONE AUDIO → WebSocket
+// STREAM MICROPHONE AUDIO to WebSocket
 // ======================================================
 function streamAudioToWebSocket() {
   audioContext = new AudioContext({ sampleRate: 16000 });
@@ -225,7 +195,8 @@ function streamAudioToWebSocket() {
   processor.connect(audioContext.destination);
 
   processor.onaudioprocess = (e) => {
-    if (!isRecording || !websocket || websocket.readyState !== WebSocket.OPEN) return;
+    if (!isRecording || !websocket || websocket.readyState !== WebSocket.OPEN)
+      return;
 
     const inputData = e.inputBuffer.getChannelData(0);
     const buffer = new ArrayBuffer(inputData.length * 2);
@@ -239,56 +210,93 @@ function streamAudioToWebSocket() {
 }
 
 // ======================================================
-// ⏹ STOP TRANSCRIPTION + EVALUATE ANSWER
+// STOP TRANSCRIPTION + EVALUATE ANSWER
 // ======================================================
 async function stopRecording() {
-    if (!isRecording || evaluationInProgress) return;
-    evaluationInProgress = true;
+  if (!isRecording || evaluationInProgress) return;
+  evaluationInProgress = true;
 
-    startBtn.disabled = true;
-    stopBtn.disabled = true;
-    nextBtn.disabled = true;
-    
-    isRecording = false;
+  startBtn.disabled = true;
+  stopBtn.disabled = true;
+  nextBtn.disabled = true;
 
-    if (processor) processor.disconnect();
-    if (audioContext) audioContext.close();
-    if (websocket) websocket.close();
-
-    try {
-        await fetch('/stop_transcription', { method: 'POST' });
-        console.log("✅ Streaming session closed");
-    } catch (err) {
-        console.error("Error stopping transcription:", err);
+  // Show spinner on the stop/evaluate button while we request the final transcript
+  try {
+    if (stopBtn) {
+      stopBtn.dataset._origHtml = stopBtn.innerHTML;
+      stopBtn.innerHTML =
+        '<div style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.9);border-top-color:transparent;border-radius:50%;margin-right:8px;vertical-align:middle;animation:spin 1s linear infinite;"></div>Stopping...';
     }
+  } catch (e) {
+    console.warn("Could not set spinner on stop button", e);
+  }
 
-    // Show evaluation in progress
-    feedbackDiv.innerHTML = `
+  isRecording = false;
+
+  if (processor) processor.disconnect();
+  if (audioContext) audioContext.close();
+  if (websocket) websocket.close();
+
+  let finalTranscript = "";
+  try {
+    const stopRes = await fetch("/stop_transcription", { method: "POST" });
+    const stopData = await stopRes.json();
+    finalTranscript =
+      stopData && stopData.transcript ? stopData.transcript : "";
+    console.log(
+      "Streaming session closed; server transcript length:",
+      finalTranscript.length,
+    );
+  } catch (err) {
+    console.error("Error stopping transcription:", err);
+  } finally {
+    // Restore stop button content
+    try {
+      if (stopBtn && stopBtn.dataset && stopBtn.dataset._origHtml) {
+        stopBtn.innerHTML = stopBtn.dataset._origHtml;
+        delete stopBtn.dataset._origHtml;
+      }
+    } catch (e) {
+      console.warn("Could not restore stop button content", e);
+    }
+  }
+
+  // Show evaluation in progress
+  feedbackDiv.innerHTML = `
         <div style="text-align: center; padding: 1rem;">
             <div style="color: #00bcd4; margin-bottom: 0.5rem;">Evaluating your answer...</div>
             <div style="width: 40px; height: 40px; border: 3px solid #00bcd4; border-top-color: transparent; border-radius: 50%; margin: 0 auto; animation: spin 1s linear infinite;"></div>
         </div>
     `;
 
-    // Evaluate answer with Gemini
-    const transcript = transcriptDiv.textContent;
-    if (transcript && transcript.length > 0) {
-        try {
-            const evalRes = await fetch('/api/evaluate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    question: currentQuestion,
-                    answer: transcript,
-                    questionNumber: questionNumber
-                })
-            });
-            const evalData = await evalRes.json();
-            
-            // Format and display feedback
-            if (evalData.result) {
-                const result = evalData.result;
-                feedbackDiv.innerHTML = `
+  // Evaluate answer with Gemini — prefer server-provided final transcript, fallback to client-side
+  const placeholders = [
+    "Listening...",
+    "Press start to begin recording...",
+    "",
+  ];
+  let transcript =
+    finalTranscript && finalTranscript.length > 0
+      ? finalTranscript
+      : transcriptDiv.textContent;
+  if (placeholders.includes(transcript)) transcript = "";
+  if (transcript && transcript.length > 0) {
+    try {
+      const evalRes = await fetch("/api/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: currentQuestion,
+          answer: transcript,
+          questionNumber: questionNumber,
+        }),
+      });
+      const evalData = await evalRes.json();
+
+      // Format and display feedback
+      if (evalData.result) {
+        const result = evalData.result;
+        feedbackDiv.innerHTML = `
                     <div style="padding: 1rem; background: rgba(0,188,212,0.1); border-radius: 8px;">
                         <div style="margin-bottom: 0.5rem;">
                             <strong style="color: #00bcd4;">Evaluation Summary:</strong>
@@ -308,107 +316,115 @@ async function stopRecording() {
                                 <div style="font-size: 1.25rem;">${result.communication}%</div>
                             </div>
                         </div>
-                        ${result.feedback ? `
+                        ${
+                          result.feedback
+                            ? `
                             <div style="margin-top: 0.5rem;">
                                 <strong style="color: #00bcd4;">Feedback:</strong>
                                 <div style="color: #ddd; margin-top: 0.25rem;">${result.feedback}</div>
                             </div>
-                        ` : ''}
+                        `
+                            : ""
+                        }
                     </div>
                 `;
 
-                // If we got a redirect URL, this was the last question
-                if (result.redirect) {
-                    setTimeout(() => {
-                        window.location.href = result.redirect;
-                    }, 2000);
-                    return;
-                }
-            } else {
-                feedbackDiv.innerText = "Evaluation complete!";
-            }
-            
-            // Enable next question button
-            nextBtn.disabled = false;
-            startBtn.disabled = false;
-            
-        } catch (err) {
-            feedbackDiv.innerText = "Error evaluating answer.";
-            console.error("Evaluation error:", err);
-            startBtn.disabled = false;
+        // If we got a redirect URL, this was the last question
+        if (result.redirect) {
+          setTimeout(() => {
+            window.location.href = result.redirect;
+          }, 2000);
+          return;
         }
+      } else {
+        feedbackDiv.innerText = "Evaluation complete!";
+      }
+
+      // Enable next question button
+      nextBtn.disabled = false;
+      startBtn.disabled = false;
+    } catch (err) {
+      feedbackDiv.innerText = "Error evaluating answer.";
+      console.error("Evaluation error:", err);
+      startBtn.disabled = false;
     }
-    
-    evaluationInProgress = false;
+  } else {
+    feedbackDiv.innerText = "No answer detected. Please try again.";
+    startBtn.disabled = false;
+    nextBtn.disabled = false;
+  }
+
+  evaluationInProgress = false;
 }
 
 // ======================================================
-// ⏭ NEXT QUESTION
+// NEXT QUESTION
 // (event listener attached after DOM ready)
 // ======================================================
 
 // ======================================================
-// 🎬 INITIALIZATION AND EVENT LISTENERS
+// INITIALIZATION AND EVENT LISTENERS
 // ======================================================
 
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', async () => {
-    // Get UI elements after DOM is ready
-    cameraEl = document.getElementById('camera');
-    startBtn = document.getElementById('startTranscriptionBtn');
-    stopBtn = document.getElementById('stopTranscriptionBtn');
-    nextBtn = document.getElementById('nextBtn');
-    
-    // Initialize other UI element references
-    questionText = document.getElementById('question-text');
-    transcriptDiv = document.getElementById('transcript');
-    feedbackDiv = document.getElementById('feedback');
-    qIndex = document.getElementById('qIndex');
-    qTotal = document.getElementById('qTotal');
+document.addEventListener("DOMContentLoaded", async () => {
+  // Get UI elements after DOM is ready
+  cameraEl = document.getElementById("camera");
+  startBtn = document.getElementById("startTranscriptionBtn");
+  stopBtn = document.getElementById("stopTranscriptionBtn");
+  nextBtn = document.getElementById("nextBtn");
 
-    if (!startBtn || !stopBtn || !nextBtn) {
-        console.error('Required UI elements not found. Check IDs in HTML.');
-        return;
-    }
+  // Initialize other UI element references
+  questionText = document.getElementById("question-text");
+  transcriptDiv = document.getElementById("transcript");
+  feedbackDiv = document.getElementById("feedback");
+  qIndex = document.getElementById("qIndex");
+  qTotal = document.getElementById("qTotal");
 
-    // Attach event listeners
-    startBtn.addEventListener('click', startRecording);
-    stopBtn.addEventListener('click', stopRecording);
-    nextBtn.addEventListener('click', async () => {
-        if (evaluationInProgress) return;
-        
-        questionNumber++;
-        await loadCurrentQuestion();
-        
-        // Reset UI state for next question
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        nextBtn.disabled = true;
-    });
+  if (!startBtn || !stopBtn || !nextBtn) {
+    console.error("Required UI elements not found. Check IDs in HTML.");
+    return;
+  }
 
-    // Add some CSS for the evaluation spinner
-    const style = document.createElement('style');
-    style.textContent = `
+  // Attach event listeners
+  startBtn.addEventListener("click", startRecording);
+  stopBtn.addEventListener("click", stopRecording);
+  nextBtn.addEventListener("click", async () => {
+    if (evaluationInProgress) return;
+
+    questionNumber++;
+    await loadCurrentQuestion();
+
+    // Reset UI state for next question
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    nextBtn.disabled = true;
+  });
+
+  // Add some CSS for the evaluation spinner
+  const style = document.createElement("style");
+  style.textContent = `
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
     `;
-    document.head.appendChild(style);
+  document.head.appendChild(style);
 
-    // Initialize camera and first question
-    const loader = document.getElementById('interviewLoader');
-    if (loader) loader.style.display = 'flex';
+  // Initialize camera and first question
+  const loader = document.getElementById("interviewLoader");
+  if (loader) loader.style.display = "flex";
 
-    try {
-        await initCamera();
-        await loadCurrentQuestion(); // Load first question
-        
-        console.log('Interview page initialized successfully');
-    } catch (error) {
-        console.error('Error initializing interview:', error);
-        questionText.innerText = 'Error initializing interview. Please refresh the page.';
-    } finally {
-        if (loader) loader.style.display = 'none';
-    }
+  try {
+    await initCamera();
+    await loadCurrentQuestion(); // Load first question
+
+    console.log("Interview page initialized successfully");
+  } catch (error) {
+    console.error("Error initializing interview:", error);
+    questionText.innerText =
+      "Error initializing interview. Please refresh the page.";
+  } finally {
+    if (loader) loader.style.display = "none";
+  }
 });

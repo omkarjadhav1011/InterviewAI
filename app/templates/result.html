@@ -60,19 +60,18 @@
 </div>
 
   <script>
-    // Sample data - replace with actual data
-    const results = [
-      { result: { confidence: 7.5, technical: 8.0, communication: 6.5, feedback: 'Great technical knowledge, work on delivery confidence.' } },
-      { result: { confidence: 8.0, technical: 7.0, communication: 8.5, feedback: 'Excellent communication skills and clear explanations.' } },
-      { result: { confidence: 6.5, technical: 9.0, communication: 7.0, feedback: 'Strong technical answers, consider more concise responses.' } },
-      { result: { confidence: 9.0, technical: 8.5, communication: 9.0, feedback: 'Outstanding performance across all metrics!' } }
-    ];
+    // Use results passed from the server
+    const results = {{ results|tojson }} || [];
 
     if (results.length > 0) {
-      // Calculate averages
-      const avgConfidence = (results.reduce((sum, r) => sum + r.result.confidence, 0) / results.length).toFixed(1);
-      const avgTechnical = (results.reduce((sum, r) => sum + r.result.technical, 0) / results.length).toFixed(1);
-      const avgCommunication = (results.reduce((sum, r) => sum + r.result.communication, 0) / results.length).toFixed(1);
+      const toDisplayScore = (v) => {
+        if (!v) return 0;
+        return v > 10 ? (v / 10) : v;
+      };
+
+      const avgConfidence = (results.reduce((sum, r) => sum + toDisplayScore(r.result && r.result.confidence), 0) / results.length).toFixed(1);
+      const avgTechnical = (results.reduce((sum, r) => sum + toDisplayScore(r.result && r.result.technical), 0) / results.length).toFixed(1);
+      const avgCommunication = (results.reduce((sum, r) => sum + toDisplayScore(r.result && r.result.communication), 0) / results.length).toFixed(1);
 
       document.getElementById('avgConfidence').textContent = avgConfidence;
       document.getElementById('avgTechnical').textContent = avgTechnical;
@@ -80,7 +79,15 @@
 
       // Create minimal chart
       const chartDiv = document.getElementById('minimalChart');
+      const feedbackDiv = document.getElementById('resultsList');
+
       results.forEach((r, i) => {
+        const conf = toDisplayScore(r.result && r.result.confidence) || 0;
+        const tech = toDisplayScore(r.result && r.result.technical) || 0;
+        const comm = toDisplayScore(r.result && r.result.communication) || 0;
+        const overall = (r.overall_score !== undefined && r.overall_score !== null) ? r.overall_score : Number(((conf + tech + comm) / 3).toFixed(1));
+
+        // Question block (chart)
         const questionBlock = document.createElement('div');
         questionBlock.className = 'question-block';
         questionBlock.innerHTML = `
@@ -89,40 +96,52 @@
             <div class="metric-row">
               <span class="metric-name">Confidence</span>
               <div class="bar-container">
-                <div class="bar bar-confidence" style="width: ${r.result.confidence * 10}%"></div>
+                <div class="bar bar-confidence" style="width: ${conf * 10}%"></div>
               </div>
-              <span class="metric-score">${r.result.confidence}</span>
+              <span class="metric-score">${conf}</span>
             </div>
             <div class="metric-row">
               <span class="metric-name">Technical</span>
               <div class="bar-container">
-                <div class="bar bar-technical" style="width: ${r.result.technical * 10}%"></div>
+                <div class="bar bar-technical" style="width: ${tech * 10}%"></div>
               </div>
-              <span class="metric-score">${r.result.technical}</span>
+              <span class="metric-score">${tech}</span>
             </div>
             <div class="metric-row">
               <span class="metric-name">Communication</span>
               <div class="bar-container">
-                <div class="bar bar-communication" style="width: ${r.result.communication * 10}%"></div>
+                <div class="bar bar-communication" style="width: ${comm * 10}%"></div>
               </div>
-              <span class="metric-score">${r.result.communication}</span>
+              <span class="metric-score">${comm}</span>
             </div>
           </div>
+          <div style="margin-top:12px;color:#cbd5e1;font-size:0.9rem;"><strong>Transcript:</strong> ${r.transcript || r.answer || ''}</div>
+          <div style="margin-top:6px;display:flex;justify-content:flex-end;"><span class="overall-score">${overall}/10</span></div>
         `;
         chartDiv.appendChild(questionBlock);
-      });
 
-      // Create feedback cards
-      const feedbackDiv = document.getElementById('resultsList');
-      feedbackDiv.innerHTML = results.map((r, i) => `
-        <div class="feedback-card">
-          <div class="feedback-header">
-            <span class="question-number">Question ${i + 1}</span>
-            <span class="overall-score">${((r.result.confidence + r.result.technical + r.result.communication) / 3).toFixed(1)}/10</span>
-          </div>
-          <p class="feedback-text">${r.result.feedback || 'Good effort! Keep practicing for smoother delivery.'}</p>
-        </div>
-      `).join('');
+        // Feedback card
+        const card = document.createElement('div');
+        card.className = 'feedback-card';
+        const header = document.createElement('div');
+        header.className = 'feedback-header';
+        const qnum = document.createElement('span');
+        qnum.className = 'question-number';
+        qnum.textContent = `Question ${i + 1}`;
+        const oscore = document.createElement('span');
+        oscore.className = 'overall-score';
+        oscore.textContent = `${overall}/10`;
+        header.appendChild(qnum);
+        header.appendChild(oscore);
+
+        const p = document.createElement('p');
+        p.className = 'feedback-text';
+        p.textContent = (r.result && (r.result.feedback || r.result.summary)) || 'Good effort! Keep practicing for smoother delivery.';
+
+        card.appendChild(header);
+        card.appendChild(p);
+        feedbackDiv.appendChild(card);
+      });
     }
   </script>
 

@@ -1,11 +1,7 @@
 import re
 import fitz  # PyMuPDF
-import spacy
 from typing import Dict, List
 from collections import Counter
-
-# Load SpaCy NLP model
-nlp = spacy.load("en_core_web_sm")
 
 # Regex patterns
 EMAIL_RE = r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}"
@@ -16,8 +12,27 @@ LINKEDIN_RE = r"(https?://(www\.)?linkedin\.com/in/[A-Za-z0-9_-]+/?)"
 SKILLS_DB = [
     "python","java","c++","html","css","javascript","sql","flask","django","react",
     "node","pytorch","tensorflow","keras","aws","azure","docker","kubernetes",
-    "git","linux","postgresql","mysql","data science","machine learning","deep learning"
+    "git","linux","postgresql","mysql","data science","machine learning","deep learning",
+    "typescript","mongodb","redis","graphql","rest api","spring","angular","vue",
+    "express","fastapi","numpy","pandas","scikit-learn","opencv","nlp",
+    "natural language processing","computer vision","devops","ci/cd","jenkins",
+    "terraform","ansible","kafka","rabbitmq","elasticsearch","rust","go","golang",
+    "swift","kotlin","flutter","dart","ruby","rails","php","laravel",".net","c#",
 ]
+
+# Common stopwords to filter out from keywords
+STOPWORDS = {
+    "the","a","an","and","or","but","in","on","at","to","for","of","with","by",
+    "from","is","are","was","were","be","been","being","have","has","had","do",
+    "does","did","will","would","shall","should","may","might","can","could",
+    "this","that","these","those","i","me","my","we","our","you","your","he",
+    "she","it","they","them","his","her","its","their","who","whom","which",
+    "what","where","when","how","all","each","every","both","few","more","most",
+    "other","some","such","no","not","only","same","so","than","too","very",
+    "also","just","about","above","after","before","between","into","through",
+    "during","out","over","under","up","down","then","once","here","there",
+    "any","new","work","use","used","using","based","well","good","like",
+}
 
 # ------------------ PDF Text Extraction ------------------
 def extract_text_from_pdf(pdf_path: str) -> str:
@@ -40,13 +55,18 @@ def extract_contact_info(text: str) -> Dict[str, List[str]]:
 
 # ------------------ Name Extraction ------------------
 def extract_name(text: str) -> str:
-    doc = nlp(text[:300])
-    for ent in doc.ents:
-        if ent.label_ == "PERSON":
-            return ent.text.strip()
-    first_line = text.split("\n")[0]
-    if len(first_line.split()) <= 5:
-        return first_line.strip()
+    # Heuristic: the name is usually on the first non-empty line
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        # Skip lines that look like emails, phone numbers, or URLs
+        if re.search(EMAIL_RE, line, re.I) or re.search(PHONE_RE, line) or re.search(r"https?://", line):
+            continue
+        # A name line is typically short (2-5 words) and mostly alphabetic
+        words = line.split()
+        if 1 <= len(words) <= 5 and all(re.match(r"^[A-Za-z.\-']+$", w) for w in words):
+            return line
     return "Not found"
 
 # ------------------ Skills Extraction ------------------
@@ -81,33 +101,35 @@ def extract_sections(text: str) -> Dict[str, str]:
     sections["experience"] = "\n".join(buffer["experience"]).strip()
     return sections
 
-# ------------------ Keyword Extraction (Improved) ------------------
+# ------------------ Keyword Extraction ------------------
 def extract_keywords(text: str, top_n: int = 15) -> List[str]:
     """
-    Extracts more accurate keywords from resume text using:
-    - spaCy noun chunks
-    - proper nouns
-    - named entities
+    Extracts keywords from resume text using:
     - predefined skill list
+    - significant multi-word phrases
+    - capitalized terms (likely proper nouns / technologies)
     """
-    doc = nlp(text.lower())
+    text_lower = text.lower()
     keywords = []
 
     # Add skills from predefined database if present
     for skill in SKILLS_DB:
-        if skill.lower() in text.lower():
+        if skill.lower() in text_lower:
             keywords.append(skill.lower())
 
-    # Add noun chunks longer than 2 characters
-    for chunk in doc.noun_chunks:
-        phrase = chunk.text.strip()
-        if len(phrase) > 2:
-            keywords.append(phrase.lower())
+    # Extract capitalized words/phrases that look like technologies or proper nouns
+    # e.g., "React", "Node.js", "AWS Lambda"
+    tech_pattern = re.compile(r'\b[A-Z][a-zA-Z+#.]*(?:\s+[A-Z][a-zA-Z+#.]*)*\b')
+    for match in tech_pattern.findall(text):
+        term = match.strip().lower()
+        if len(term) > 2 and term not in STOPWORDS:
+            keywords.append(term)
 
-    # Add named entities (except common types)
-    for ent in doc.ents:
-        if ent.label_ not in ["DATE", "TIME", "MONEY", "PERCENT"]:
-            keywords.append(ent.text.strip().lower())
+    # Extract meaningful words (3+ chars, not stopwords, not pure numbers)
+    word_pattern = re.compile(r'\b[a-zA-Z]{3,}\b')
+    for match in word_pattern.findall(text_lower):
+        if match not in STOPWORDS and not match.isdigit():
+            keywords.append(match)
 
     # Remove stopwords, punctuation, short words
     keywords = [k for k in keywords if len(k) > 2 and not k.isdigit()]

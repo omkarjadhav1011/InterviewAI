@@ -4,6 +4,7 @@ from ..services.gemini_service import generate_questions, evaluate_answer
 from ..services.vapi_service import tts_synthesize, stt_transcribe
 from pymongo import MongoClient
 import os
+import datetime
 
 interview_bp = Blueprint('interview', __name__)
 
@@ -12,6 +13,8 @@ MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/interview_app')
 client = MongoClient(MONGO_URI)
 db = client.get_default_database() if client else client['interview_app']
 users = db.users
+# New collection for storing interview runs as separate documents
+interview_runs = db.interview_runs
 
 
 @interview_bp.route('/interview')
@@ -27,7 +30,6 @@ def api_get_question():
     user_doc = users.find_one({'email': current_user.email})
     keywords = user_doc.get('keywords', [])
     q = generate_questions(keywords, count=7)
-    # return one question at a time; here we return the full list and the client handles ordering
     return jsonify({'questions': q})
 
 
@@ -40,14 +42,11 @@ def get_questions():
     3. Generate questions from DB skills
     4. Return empty lists if no data available
     """
-    # Get the requested question number (0-based index)
     question_number = request.args.get('question', type=int, default=0)
-    
-    # First try to get pre-generated questions from session
+
     questions = session.get('interview_questions', [])
     current_app.logger.debug('Session questions: %s', len(questions) if questions else 0)
-    
-    # Get skills with fallback chain: session -> DB -> empty
+
     skills = session.get('skills', [])
     if not skills:
         user_doc = users.find_one({'email': current_user.email})
@@ -55,21 +54,18 @@ def get_questions():
             skills = user_doc.get('skills', [])
     current_app.logger.debug('Available skills: %s', len(skills) if skills else 0)
 
-    # If we have skills but no questions, generate them
     if skills and not questions:
         try:
-            questions = generate_questions(skills, count=5)  # Generate exactly 5 questions
-            # Store in session for consistency
+            questions = generate_questions(skills, count=5)
             session['interview_questions'] = questions
             current_app.logger.info('Generated %d new questions', len(questions))
             print(f'Generated {len(questions)} questions')
         except Exception:
             current_app.logger.exception('Failed to generate questions from skills')
             questions = []
-    
-    # Return the current question number and total, plus the current question
+
     current_question = questions[question_number] if questions and question_number < len(questions) else None
-    
+
     return jsonify({
         'currentQuestion': current_question,
         'questionNumber': question_number,
@@ -80,7 +76,7 @@ def get_questions():
             'completed': question_number / 5 * 100
         },
         'skills': skills,
-        'isLastQuestion': question_number >= 4  # 0-based index, so 4 is the 5th question
+        'isLastQuestion': question_number >= 4
     })
 
 
@@ -89,7 +85,6 @@ def get_questions():
 def api_tts():
     data = request.json
     text = data.get('text', '')
-    # TTS service returns URL or bytes; here we return a placeholder
     audio_url = tts_synthesize(text)
     return jsonify({'audio_url': audio_url})
 
@@ -97,7 +92,6 @@ def api_tts():
 @interview_bp.route('/api/stt', methods=['POST'])
 @login_required
 def api_stt():
-    # Expect audio blob uploaded as form-data file 'audio'
     if 'audio' not in request.files:
         return jsonify({'error': 'no audio'}), 400
     audio = request.files['audio']
@@ -109,45 +103,83 @@ def api_stt():
 @login_required
 def api_evaluate():
     data = request.json
-    question = data.get('question')
-    answer = data.get('answer')
+    question = data.get('question', '')
+    answer = data.get('answer', '')
     question_number = data.get('questionNumber', 0)
-    
+
     # Get evaluation from Gemini
     result = evaluate_answer(question, answer)
-    
+
+    # Compute a simple overall score on a 1-10 scale based on Gemini scores
+    def _compute_overall_score(result_dict, answer_text: str) -> float:
+        try:
+            c = float(result_dict.get('confidence', 0))
+            t = float(result_dict.get('technical', 0))
+            com = float(result_dict.get('communication', 0))
+        except Exception:
+            c, t, com = 0.0, 0.0, 0.0
+
+        words = len((answer_text or "").split())
+
+        if words == 0:
+            return 1.0
+        if words <= 2:
+            return 2.0
+
+        avg_pct = (c + t + com) / 3.0  # 0-100
+        base_score = round(max(1.0, min(10.0, avg_pct / 10.0)), 1)
+
+        if avg_pct >= 75:
+            return max(base_score, 8.0)
+        if 45 <= avg_pct < 75:
+            return max(base_score, 5.0)
+        return base_score
+
+    overall_score_10 = _compute_overall_score(result, answer)
+    result['overall_score'] = overall_score_10
+
     # Store in session to track progress
     session_results = session.get('interview_results', [])
     session_results.append({
         'question': question,
         'answer': answer,
+        'transcript': answer,
         'result': result,
+        'overall_score': overall_score_10,
         'questionNumber': question_number
     })
     session['interview_results'] = session_results
-    
-    # If this was the last question (5th), store all results in DB
-    if question_number >= 4:  # 0-based index, so 4 is the 5th question
-        users.update_one(
-            {'email': current_user.email},
-            {
-                '$push': {
-                    'results': {
-                        '$each': session_results
-                    }
+
+    # If this was the last question (5th), store the interview run as a single document
+    if question_number >= 4:
+        try:
+            run_doc = {
+                'user_email': current_user.email,
+                'created_at': datetime.datetime.utcnow(),
+                'skills': session.get('skills', []),
+                'questions': session.get('interview_questions', []),
+                'results': session_results,
+                'summary': {
+                    'total_questions': len(session_results),
                 }
             }
-        )
-        # Clear session results after storing
-        session.pop('interview_results', None)
-        result['redirect'] = url_for('interview.results_page')
-    
+            interview_runs.insert_one(run_doc)
+            session.pop('interview_results', None)
+            result['redirect'] = url_for('interview.results_page')
+        except Exception:
+            current_app.logger.exception('Failed to persist interview run')
+
     return jsonify({'result': result, 'questionNumber': question_number})
 
 
 @interview_bp.route('/results')
 @login_required
 def results_page():
-    user_doc = users.find_one({'email': current_user.email})
-    results = user_doc.get('results', [])
+    latest_run = interview_runs.find_one({'user_email': current_user.email}, sort=[('created_at', -1)])
+    if latest_run:
+        results = latest_run.get('results', [])
+    else:
+        user_doc = users.find_one({'email': current_user.email})
+        results = user_doc.get('results', []) if user_doc else []
+
     return render_template('result.html', results=results)
