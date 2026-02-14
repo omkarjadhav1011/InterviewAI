@@ -23,6 +23,7 @@ let audioContext = null;
 let processor = null;
 let isRecording = false;
 let evaluationInProgress = false;
+let accumulatedTranscript = ""; // Accumulates final transcript segments from AssemblyAI
 
 // ======================================================
 // CAMERA + AUDIO SETUP
@@ -146,20 +147,48 @@ async function startRecording() {
   startBtn.disabled = true;
   stopBtn.disabled = false;
 
+  accumulatedTranscript = "";
+
   try {
     const response = await fetch("/start_transcription", { method: "POST" });
-    const { ws_url } = await response.json();
+    const resData = await response.json();
 
-    websocket = new WebSocket(ws_url);
+    if (!resData.ws_url) {
+      throw new Error(resData.error || "No WebSocket URL received from server");
+    }
+
+    websocket = new WebSocket(resData.ws_url);
 
     websocket.onopen = () => {
-      console.log("Connected to WebSocket transcription session");
+      console.log("Connected to AssemblyAI WebSocket");
       streamAudioToWebSocket();
     };
 
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.text) transcriptDiv.textContent = data.text;
+
+      // AssemblyAI v3 Universal-Streaming format
+      // type: "Begin" (session start), "Turn" (transcript), "Termination" (session end)
+      if (data.type === "Turn" && data.transcript) {
+        if (data.end_of_turn) {
+          // Final turn — accumulate the complete utterance
+          accumulatedTranscript += data.transcript + " ";
+          transcriptDiv.textContent = accumulatedTranscript.trim();
+          // Send final text to server for backup
+          fetch("/update_transcript", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: data.transcript }),
+          }).catch(() => {});
+        } else {
+          // Partial/in-progress — show alongside accumulated finals
+          transcriptDiv.textContent = (accumulatedTranscript + data.transcript).trim();
+        }
+      } else if (data.type === "Begin") {
+        console.log("AssemblyAI session started, ID:", data.id);
+      } else if (data.type === "Termination") {
+        console.log("AssemblyAI session ended, duration:", data.audio_duration_seconds, "s");
+      }
     };
 
     websocket.onerror = (err) => {
@@ -235,6 +264,14 @@ async function stopRecording() {
 
   if (processor) processor.disconnect();
   if (audioContext) audioContext.close();
+  // Send terminate message to AssemblyAI before closing
+  if (websocket && websocket.readyState === WebSocket.OPEN) {
+    try {
+      websocket.send(JSON.stringify({ type: "Terminate" }));
+    } catch (e) {
+      console.warn("Could not send terminate message", e);
+    }
+  }
   if (websocket) websocket.close();
 
   let finalTranscript = "";
@@ -269,16 +306,22 @@ async function stopRecording() {
         </div>
     `;
 
-  // Evaluate answer with Gemini — prefer server-provided final transcript, fallback to client-side
+  // Evaluate answer — prefer: server transcript > client accumulated > displayed text
   const placeholders = [
     "Listening...",
     "Press start to begin recording...",
+    "Connection error. Press start to try again.",
+    "Failed to start transcription. Press start to try again.",
     "",
   ];
-  let transcript =
-    finalTranscript && finalTranscript.length > 0
-      ? finalTranscript
-      : transcriptDiv.textContent;
+  let transcript = "";
+  if (finalTranscript && finalTranscript.trim().length > 0) {
+    transcript = finalTranscript.trim();
+  } else if (accumulatedTranscript && accumulatedTranscript.trim().length > 0) {
+    transcript = accumulatedTranscript.trim();
+  } else {
+    transcript = transcriptDiv.textContent;
+  }
   if (placeholders.includes(transcript)) transcript = "";
   if (transcript && transcript.length > 0) {
     try {

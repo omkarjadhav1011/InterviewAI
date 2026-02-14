@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from app.services import transcription_service
 
 transcription_bp = Blueprint("transcription", __name__)
@@ -12,3 +12,10 @@ def start_transcription():
 def stop_transcription():
     result = transcription_service.stop_transcription()
     return jsonify(result)
+
+@transcription_bp.route("/update_transcript", methods=["POST"])
+def update_transcript():
+    data = request.json or {}
+    text = data.get("text", "")
+    transcription_service.update_transcript(text)
+    return jsonify({"status": "ok"})
