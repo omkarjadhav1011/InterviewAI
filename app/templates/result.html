@@ -1,366 +1,39 @@
 {% extends 'base.html' %}
-{% block title %}Upload Resume | MockMinds{% endblock %}
+{% block title %}Interview Results — MockMinds{% endblock %}
 
 {% block content %}
-<style>
-  .results-wrapper {
-    width: 100%;
-    max-width: 1200px;
-    animation: fadeInUp 0.6s ease-out;
-  }
-
-  .results-header {
-    text-align: center;
-    margin-bottom: 48px;
-  }
-
-  .emoji-badge {
-    font-size: 3rem;
-    margin-bottom: 16px;
-    animation: bounce 2s ease-in-out infinite;
-  }
-
-  .results-header h1 {
-    font-size: 2.5rem;
-    font-weight: 700;
-    background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 8px;
-  }
-
-  .results-header p {
-    color: #94a3b8;
-    font-size: 1.1rem;
-    font-weight: 300;
-  }
-
-  .stats-overview {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 24px;
-    margin-bottom: 48px;
-  }
-
-  .stat-card {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    padding: 32px;
-    text-align: center;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
-  }
-
-  .stat-card:hover {
-    transform: translateY(-5px);
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.2);
-  }
-
-  .stat-icon {
-    font-size: 2.5rem;
-    margin-bottom: 12px;
-  }
-
-  .stat-value {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: #60a5fa;
-    margin-bottom: 8px;
-  }
-
-  .stat-label {
-    color: #94a3b8;
-    font-size: 0.95rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .results-content {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 32px;
-    margin-bottom: 48px;
-  }
-
-  .chart-section, .feedback-section {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    padding: 32px;
-    backdrop-filter: blur(10px);
-  }
-
-  .chart-section h2, .feedback-section h2 {
-    font-size: 1.5rem;
-    font-weight: 600;
-    margin-bottom: 24px;
-    color: #f1f5f9;
-  }
-
-  .minimal-chart {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-  }
-
-  .question-block {
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 12px;
-    padding: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-  }
-
-  .question-label {
-    font-weight: 600;
-    color: #a78bfa;
-    margin-bottom: 16px;
-    font-size: 0.9rem;
-  }
-
-  .metrics-bars {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .metric-row {
-    display: grid;
-    grid-template-columns: 110px 1fr 40px;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .metric-name {
-    font-size: 0.85rem;
-    color: #94a3b8;
-    font-weight: 500;
-  }
-
-  .bar-container {
-    height: 8px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    overflow: hidden;
-  }
-
-  .bar {
-    height: 100%;
-    border-radius: 10px;
-    transition: width 1s ease-out;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .bar::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-    animation: shimmer 2s infinite;
-  }
-
-  .bar-confidence {
-    background: linear-gradient(90deg, #06b6d4, #3b82f6);
-  }
-
-  .bar-technical {
-    background: linear-gradient(90deg, #8b5cf6, #a78bfa);
-  }
-
-  .bar-communication {
-    background: linear-gradient(90deg, #ec4899, #f472b6);
-  }
-
-  .metric-score {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #e2e8f0;
-    text-align: right;
-  }
-
-  .feedback-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .feedback-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-    padding: 20px;
-    transition: all 0.3s ease;
-  }
-
-  .feedback-card:hover {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-
-  .feedback-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-  }
-
-  .question-number {
-    font-weight: 600;
-    color: #60a5fa;
-    font-size: 0.9rem;
-  }
-
-  .overall-score {
-    background: linear-gradient(135deg, #10b981, #34d399);
-    color: white;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-
-  .feedback-text {
-    color: #cbd5e1;
-    font-size: 0.95rem;
-    line-height: 1.6;
-    font-style: italic;
-  }
-
-  .actions {
-    display: flex;
-    justify-content: center;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    border: none;
-    border-radius: 12px;
-    padding: 16px 32px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-family: inherit;
-  }
-
-  .btn span {
-    font-size: 1.2rem;
-  }
-
-  .btn-primary {
-    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-    color: white;
-    box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
-  }
-
-  .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 15px 40px rgba(59, 130, 246, 0.4);
-  }
-
-  .btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-  }
-
-  .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.3);
-  }
-
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(30px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes bounce {
-    0%, 100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-10px);
-    }
-  }
-
-  @keyframes shimmer {
-    0% {
-      transform: translateX(-100%);
-    }
-    100% {
-      transform: translateX(100%);
-    }
-  }
-
-  @media (max-width: 968px) {
-    .results-content {
-      grid-template-columns: 1fr;
-    }
-
-    .metric-row {
-      grid-template-columns: 100px 1fr 35px;
-    }
-  }
-
-  @media (max-width: 640px) {
-    .results-header h1 {
-      font-size: 2rem;
-    }
-
-    .stats-overview {
-      grid-template-columns: 1fr;
-    }
-
-    .btn {
-      width: 100%;
-      justify-content: center;
-    }
-  }
-</style>
 
 <div class="results-wrapper">
+
+  <!-- ── Header ──────────────────────────────────────── -->
   <div class="results-header">
-    <div class="emoji-badge">🎯</div>
+    <div class="emoji-badge">&#127919;</div>
     <h1>Interview Performance</h1>
-    <p>Your detailed analysis and metrics</p>
+    <p>Your detailed analysis across all questions</p>
   </div>
 
+  <!-- ── Stat Cards ─────────────────────────────────── -->
   <div class="stats-overview">
     <div class="stat-card">
-      <div class="stat-icon">💪</div>
-      <div class="stat-value" id="avgConfidence">0</div>
+      <span class="stat-icon">&#128170;</span>
+      <div class="stat-value" id="avgConfidence">—</div>
       <div class="stat-label">Confidence</div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon">🧠</div>
-      <div class="stat-value" id="avgTechnical">0</div>
+      <span class="stat-icon">&#129504;</span>
+      <div class="stat-value" id="avgTechnical">—</div>
       <div class="stat-label">Technical</div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon">💬</div>
-      <div class="stat-value" id="avgCommunication">0</div>
+      <span class="stat-icon">&#128172;</span>
+      <div class="stat-value" id="avgCommunication">—</div>
       <div class="stat-label">Communication</div>
     </div>
   </div>
 
+  <!-- ── Detailed Breakdown ─────────────────────────── -->
   <div class="results-content">
+
     <div class="chart-section">
       <h2>Performance Breakdown</h2>
       <div id="minimalChart" class="minimal-chart"></div>
@@ -370,103 +43,127 @@
       <h2>Question Analysis</h2>
       <div id="resultsList" class="feedback-list"></div>
     </div>
+
   </div>
 
+  <!-- ── Actions ────────────────────────────────────── -->
   <div class="actions">
     <button class="btn btn-primary" onclick="window.location.href='/interview'">
-      <span>🎙️</span>
-      Retake Interview
+      <span>&#127908;</span> Retake Interview
     </button>
     <button class="btn btn-secondary" onclick="window.location.href='/'">
-      <span>🏠</span>
-      Home
+      <span>&#127968;</span> Dashboard
     </button>
   </div>
 
-  <script>
-    // Use results passed from the server
-    const results = {{ results|tojson }} || [];
-
-    if (results.length > 0) {
-      const toDisplayScore = (v) => {
-        if (!v) return 0;
-        return v > 10 ? (v / 10) : v;
-      };
-
-      const avgConfidence = (results.reduce((sum, r) => sum + toDisplayScore(r.result && r.result.confidence), 0) / results.length).toFixed(1);
-      const avgTechnical = (results.reduce((sum, r) => sum + toDisplayScore(r.result && r.result.technical), 0) / results.length).toFixed(1);
-      const avgCommunication = (results.reduce((sum, r) => sum + toDisplayScore(r.result && r.result.communication), 0) / results.length).toFixed(1);
-
-      document.getElementById('avgConfidence').textContent = avgConfidence;
-      document.getElementById('avgTechnical').textContent = avgTechnical;
-      document.getElementById('avgCommunication').textContent = avgCommunication;
-
-      // Create minimal chart
-      const chartDiv = document.getElementById('minimalChart');
-      const feedbackDiv = document.getElementById('resultsList');
-
-      results.forEach((r, i) => {
-        const conf = toDisplayScore(r.result && r.result.confidence) || 0;
-        const tech = toDisplayScore(r.result && r.result.technical) || 0;
-        const comm = toDisplayScore(r.result && r.result.communication) || 0;
-        const overall = (r.overall_score !== undefined && r.overall_score !== null) ? r.overall_score : Number(((conf + tech + comm) / 3).toFixed(1));
-
-        // Question block (chart)
-        const questionBlock = document.createElement('div');
-        questionBlock.className = 'question-block';
-        questionBlock.innerHTML = `
-          <div class="question-label">Q${i + 1}</div>
-          <div class="metrics-bars">
-            <div class="metric-row">
-              <span class="metric-name">Confidence</span>
-              <div class="bar-container">
-                <div class="bar bar-confidence" style="width: ${conf * 10}%"></div>
-              </div>
-              <span class="metric-score">${conf}</span>
-            </div>
-            <div class="metric-row">
-              <span class="metric-name">Technical</span>
-              <div class="bar-container">
-                <div class="bar bar-technical" style="width: ${tech * 10}%"></div>
-              </div>
-              <span class="metric-score">${tech}</span>
-            </div>
-            <div class="metric-row">
-              <span class="metric-name">Communication</span>
-              <div class="bar-container">
-                <div class="bar bar-communication" style="width: ${comm * 10}%"></div>
-              </div>
-              <span class="metric-score">${comm}</span>
-            </div>
-          </div>
-          <div style="margin-top:12px;color:#cbd5e1;font-size:0.9rem;"><strong>Transcript:</strong> ${r.transcript || r.answer || ''}</div>
-          <div style="margin-top:6px;display:flex;justify-content:flex-end;"><span class="overall-score">${overall}/10</span></div>
-        `;
-        chartDiv.appendChild(questionBlock);
-
-        // Feedback card
-        const card = document.createElement('div');
-        card.className = 'feedback-card';
-        const header = document.createElement('div');
-        header.className = 'feedback-header';
-        const qnum = document.createElement('span');
-        qnum.className = 'question-number';
-        qnum.textContent = `Question ${i + 1}`;
-        const oscore = document.createElement('span');
-        oscore.className = 'overall-score';
-        oscore.textContent = `${overall}/10`;
-        header.appendChild(qnum);
-        header.appendChild(oscore);
-
-        const p = document.createElement('p');
-        p.className = 'feedback-text';
-        p.textContent = (r.result && (r.result.feedback || r.result.summary)) || 'Good effort! Keep practicing for smoother delivery.';
-
-        card.appendChild(header);
-        card.appendChild(p);
-        feedbackDiv.appendChild(card);
-      });
-    }
-  </script>
 </div>
+
+<script>
+  // ─── Results rendering ─────────────────────────────
+  // Uses results passed from Flask via Jinja — do NOT rename template variable.
+  const results = {{ results|tojson }} || [];
+
+  if (results.length > 0) {
+    const toDisplayScore = (v) => {
+      if (!v) return 0;
+      return v > 10 ? (v / 10) : v;
+    };
+
+    // Compute averages
+    const avg = (key) =>
+      (results.reduce((s, r) => s + toDisplayScore(r.result && r.result[key]), 0) / results.length).toFixed(1);
+
+    document.getElementById('avgConfidence').textContent    = avg('confidence');
+    document.getElementById('avgTechnical').textContent     = avg('technical');
+    document.getElementById('avgCommunication').textContent = avg('communication');
+
+    const chartDiv    = document.getElementById('minimalChart');
+    const feedbackDiv = document.getElementById('resultsList');
+
+    results.forEach((r, i) => {
+      const conf  = toDisplayScore(r.result && r.result.confidence)    || 0;
+      const tech  = toDisplayScore(r.result && r.result.technical)     || 0;
+      const comm  = toDisplayScore(r.result && r.result.communication) || 0;
+      const overall = (r.overall_score !== undefined && r.overall_score !== null)
+        ? r.overall_score
+        : Number(((conf + tech + comm) / 3).toFixed(1));
+
+      // ── Performance bar block ──
+      const block = document.createElement('div');
+      block.className = 'question-block';
+      block.style.animationDelay = (i * 0.06) + 's';
+      block.innerHTML = `
+        <div class="question-label">Q${i + 1}</div>
+        <div class="metrics-bars">
+          <div class="metric-row">
+            <span class="metric-name">Confidence</span>
+            <div class="bar-container">
+              <div class="bar bar-confidence" style="width:0%" data-width="${conf * 10}"></div>
+            </div>
+            <span class="metric-score">${conf}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-name">Technical</span>
+            <div class="bar-container">
+              <div class="bar bar-technical" style="width:0%" data-width="${tech * 10}"></div>
+            </div>
+            <span class="metric-score">${tech}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-name">Communication</span>
+            <div class="bar-container">
+              <div class="bar bar-communication" style="width:0%" data-width="${comm * 10}"></div>
+            </div>
+            <span class="metric-score">${comm}</span>
+          </div>
+        </div>
+        <div style="margin-top:12px; color:var(--text-secondary); font-size:0.82rem; font-family:var(--font-mono);">
+          ${r.transcript || r.answer ? `"${(r.transcript || r.answer).slice(0,120)}${(r.transcript || r.answer).length > 120 ? '…' : ''}"` : ''}
+        </div>
+        <div style="margin-top:8px; text-align:right;">
+          <span class="overall-score">${overall}/10</span>
+        </div>
+      `;
+      chartDiv.appendChild(block);
+
+      // ── Feedback card ──
+      const card = document.createElement('div');
+      card.className = 'feedback-card';
+      card.style.animationDelay = (i * 0.07 + 0.1) + 's';
+
+      const header = document.createElement('div');
+      header.className = 'feedback-header';
+
+      const qnum = document.createElement('span');
+      qnum.className = 'question-number';
+      qnum.textContent = `Question ${i + 1}`;
+
+      const score = document.createElement('span');
+      score.className = 'overall-score';
+      score.textContent = `${overall}/10`;
+
+      header.appendChild(qnum);
+      header.appendChild(score);
+
+      const txt = document.createElement('p');
+      txt.className = 'feedback-text';
+      txt.textContent = (r.result && (r.result.feedback || r.result.summary))
+        || 'Good effort! Keep practising for smoother delivery.';
+
+      card.appendChild(header);
+      card.appendChild(txt);
+      feedbackDiv.appendChild(card);
+    });
+
+    // Animate bars in after a short delay (allows CSS transition to fire)
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        document.querySelectorAll('.bar[data-width]').forEach((bar) => {
+          bar.style.width = bar.dataset.width + '%';
+        });
+      }, 120);
+    });
+  }
+</script>
+
 {% endblock %}

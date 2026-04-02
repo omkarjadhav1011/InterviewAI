@@ -1,181 +1,115 @@
 {% extends 'base.html' %}
-{% block title %}Upload Resume | MockMinds{% endblock %}
+{% block title %}Upload Resume — MockMinds{% endblock %}
 
 {% block content %}
 <div class="upload-container">
   <div class="upload-card">
-    <h2>📄 Upload Your Resume</h2>
-    <p class="subtitle">Upload your PDF resume to start your AI-powered interview.</p>
 
-    <form id="resumeForm" class="upload-form" enctype="multipart/form-data">
-      <input type="file" id="resumeFile" accept="application/pdf" required class="file-input">
-      <button type="submit" class="upload-btn">Upload</button>
+    <!-- Page heading -->
+    <div class="upload-heading">
+      <h2>Upload Your Resume</h2>
+      <p>Drop your PDF and let the AI extract your skills, then generate a personalised interview.</p>
+    </div>
+
+    <!-- Upload Form — IDs preserved for resume.js -->
+    <form id="resumeForm" enctype="multipart/form-data">
+
+      <!-- Hidden native file input — resume.js reads from this -->
+      <input
+        type="file"
+        id="resumeFile"
+        name="resume"
+        accept="application/pdf"
+        required
+        class="file-input"
+        aria-hidden="true"
+        tabindex="-1"
+      >
+
+      <!-- Beautiful drag-and-drop zone -->
+      <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Upload resume PDF">
+        <div class="drop-zone__icon">
+          <i class="fas fa-file-pdf"></i>
+        </div>
+        <div class="drop-zone__text">
+          <p class="drop-zone__primary">Drop your PDF here</p>
+          <p class="drop-zone__secondary">or click to browse files</p>
+          <span class="drop-zone__filename" id="fileLabel">
+            <i class="fas fa-check-circle"></i>
+            <span id="fileLabelText"></span>
+          </span>
+        </div>
+      </div>
+
+      <button type="submit" class="upload-btn">
+        Analyse Resume &rarr;
+      </button>
     </form>
 
+    <!-- Progress — shown/hidden by resume.js -->
     <div id="progress" class="progress-section">
-      <div id="progressBar"></div>
+      <div class="progress-track">
+        <div id="progressBar"></div>
+      </div>
       <p id="progressText"></p>
     </div>
 
-    <!-- Updated Skills Section -->
+    <!-- Skills extracted — populated by resume.js -->
     <div id="keywords" class="skills-section"></div>
+
   </div>
 </div>
+{% endblock %}
 
-<style>
-  .upload-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    padding: 30px;
-  }
+{% block scripts %}
+<script>
+  // ─── Drop Zone wiring ─────────────────────────────────
+  // resume.js reads from #resumeFile; we intercept clicks and drops
+  // to keep the hidden native input in sync.
+  (function () {
+    const zone      = document.getElementById('dropZone');
+    const input     = document.getElementById('resumeFile');
+    const labelText = document.getElementById('fileLabelText');
 
-  .upload-card {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(12px);
-    border-radius: 20px;
-    padding: 40px 50px;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-    text-align: center;
-    max-width: 480px;
-    width: 100%;
-    animation: fadeIn 0.7s ease-in-out;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .upload-card h2 {
-    font-size: 1.9rem;
-    margin-bottom: 10px;
-    color: #fff;
-  }
-
-  .subtitle {
-    color: #d0d0d0;
-    font-size: 1rem;
-    margin-bottom: 25px;
-  }
-
-  .file-input {
-    width: 100%;
-    padding: 14px;
-    border: 2px dashed #4fa3ff;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.05);
-    color: #fff;
-    margin-bottom: 20px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-  }
-
-  .file-input:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: #70b8ff;
-  }
-
-  .upload-btn {
-    background: #f59e0b;
-    color: white;
-    padding: 12px 30px;
-    border: none;
-    border-radius: 12px;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: background 0.3s ease, transform 0.2s;
-  }
-
-  .upload-btn:hover {
-    background: #d97706;
-    transform: translateY(-2px);
-  }
-
-  /* Progress Bar Section */
-  .progress-section {
-    display: none;
-    margin-top: 25px;
-    text-align: center;
-    width: 100%;
-  }
-
-  #progressBar {
-    height: 12px;
-    width: 0%;
-    border-radius: 8px;
-    background: #4fa3ff;
-    transition: width 0.4s ease;
-  }
-
-  #progressText {
-    margin-top: 10px;
-    font-size: 0.95rem;
-    color: #ddd;
-  }
-
-  /* Skills Section */
-  .skills-section {
-    margin-top: 30px;
-    font-size: 0.95rem;
-    color: #fff;
-  }
-
-  .keyword-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 10px;
-    justify-content: center;
-  }
-
-  .keyword {
-    background: rgba(255, 255, 255, 0.15);
-    padding: 6px 12px;
-    border-radius: 10px;
-    color: #fff;
-    font-size: 0.9rem;
-    font-weight: 500;
-    transition: transform 0.2s, background 0.3s;
-  }
-
-  .keyword:hover {
-    transform: scale(1.05);
-    background: rgba(255, 255, 255, 0.25);
-  }
-
-  .start-btn {
-    display: inline-block;
-    margin-top: 20px;
-    background: #43d17d;
-    color: white;
-    padding: 12px 25px;
-    border-radius: 25px;
-    text-decoration: none;
-    font-weight: 600;
-    transition: background 0.3s ease, transform 0.2s;
-  }
-
-  .start-btn:hover {
-    background: #36b76a;
-    transform: translateY(-2px);
-  }
-
-  @media (max-width: 640px) {
-    .upload-card {
-      padding: 30px 25px;
+    function markFile(name) {
+      labelText.textContent = name;
+      zone.classList.add('has-file');
     }
 
-    .upload-card h2 {
-      font-size: 1.6rem;
-    }
+    // Click on zone → open file picker
+    zone.addEventListener('click', () => input.click());
+    zone.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        input.click();
+      }
+    });
 
-    .subtitle {
-      font-size: 0.9rem;
-    }
-  }
-</style>
+    // Native input changed
+    input.addEventListener('change', () => {
+      if (input.files.length) markFile(input.files[0].name);
+    });
 
+    // Drag events
+    zone.addEventListener('dragover',  (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', ()  => zone.classList.remove('drag-over'));
+    zone.addEventListener('dragenter', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      const files = e.dataTransfer.files;
+      if (files.length && files[0].type === 'application/pdf') {
+        // Transfer dropped file onto the real input
+        const dt = new DataTransfer();
+        dt.items.add(files[0]);
+        input.files = dt.files;
+        markFile(files[0].name);
+      }
+    });
+  })();
+</script>
+
+<!-- Resume upload + skills extraction logic -->
 <script src="{{ url_for('static', filename='js/resume.js') }}"></script>
 {% endblock %}
