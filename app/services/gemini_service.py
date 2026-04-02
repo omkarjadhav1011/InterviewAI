@@ -51,23 +51,22 @@ def generate_questions(skills: List[str], count: int = 7) -> List[str]:
             model = genai.GenerativeModel("models/gemini-2.0-flash")
 
             prompt = f"""
-You are an AI Interview Assistant designed to conduct realistic, beginner-level job interviews.
+You are an AI Interview Assistant. Generate interview questions that are **strictly based on the candidate's resume skills**.
 
-Your goal is to simulate a professional yet approachable interview experience, ask relevant and clear questions, and remember details from the candidate's previous responses to create a natural and adaptive conversation flow.
+Skills extracted from resume: {', '.join(skills)}
 
-**Guidelines:**
-1. Maintain a professional but friendly and encouraging tone to make the candidate comfortable.
-2. Ask **one clear, concise question at a time**.
-3. Focus on **basic and intermediate-level** questions that assess **core concepts, understanding, and practical thinking**.
-4. Include both **technical** and **behavioral** aspects relevant to the candidate's role.
-5. Keep responses and questions under **3 sentences**, unless deeper exploration is required.
+Requirements:
+- Generate exactly {count} questions.
+- Each question must map to one or more of the listed skills; do NOT use skills outside the list.
+- Mix question types: core concept, applied scenario, debugging/troubleshooting, and one behavioral question tied to a skill.
+- Target beginner-to-intermediate level; avoid advanced theory unless a skill clearly implies it.
+- Ask one clear question at a time, under 2 sentences.
+- Keep the tone professional and encouraging.
+- Do not mention the resume or the skill list explicitly.
 
-    Generate {count} concise, varied **basic or intermediate-level** technical interview questions
-    for a candidate skilled in {', '.join(skills)}.
-    Focus on testing **practical understanding** and **core concepts**.
-    Return only the questions, **one per line**, with **no numbering or extra text**.
-
-Your overall goal is to assess the candidate's **foundational knowledge, communication skills, and reasoning ability** while maintaining a conversational, encouraging tone.
+Output format:
+- Return only the questions, one per line.
+- No numbering, no bullets, no extra text.
 """
 
             print("Gemini: Sending API request...")
@@ -111,27 +110,31 @@ def evaluate_answer(question: str, answer: str) -> dict:
         model = genai.GenerativeModel("models/gemini-2.0-flash")
 
         prompt = f"""
-As an expert technical interviewer, evaluate the following interview response.
-Consider clarity, technical accuracy, and communication skills.
+You are an expert technical interviewer. Evaluate the candidate's response based only on the content of the answer/transcript.
 
 Question: {question}
-Answer: {answer}
+Answer/Transcript: {answer}
 
-Provide evaluation in the following JSON format:
+Scoring rubric (0-100 each):
+- Confidence: structure, specificity, and decisiveness; penalize excessive hedging or vagueness.
+- Technical: correctness, depth, and appropriate terminology; penalize inaccuracies or irrelevant content.
+- Communication: clarity, organization, and helpful examples; penalize rambling or disorganized delivery.
+
+Rules:
+- If the answer is empty or nearly empty, give low scores and note missing content.
+- If the answer is off-topic, reduce technical and communication scores.
+- Favor concise, correct, well-structured answers with concrete examples.
+
+Return ONLY valid JSON in this exact schema (no extra keys, no commentary):
 {{
-    "confidence": <score 0-100>,
-    "technical": <score 0-100>,
-    "communication": <score 0-100>,
-    "summary": "<brief evaluation summary>",
-    "feedback": "<constructive feedback>",
-    "strengths": ["<key strength 1>", "<key strength 2>"],
-    "areas_to_improve": ["<area 1>", "<area 2>"]
+  "confidence": <score 0-100>,
+  "technical": <score 0-100>,
+  "communication": <score 0-100>,
+  "summary": "<1-2 sentence evaluation summary>",
+  "feedback": "<actionable, constructive feedback in 1-2 sentences>",
+  "strengths": ["<key strength 1>", "<key strength 2>"],
+  "areas_to_improve": ["<area 1>", "<area 2>"]
 }}
-
-Base the scores on:
-- Confidence: Answer structure, certainty in statements
-- Technical: Accuracy, depth of knowledge, proper terminology
-- Communication: Clarity, organization, example usage
 """
 
         response = model.generate_content(prompt)
