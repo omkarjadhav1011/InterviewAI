@@ -165,7 +165,25 @@
       scoreEl.className = 'overall-score';
       scoreEl.textContent = `${overall}/10`;
 
+      const hasVoice = r.transcript && r.transcript.trim().length > 0;
+      const hasTyped  = r.typed      && r.typed.trim().length      > 0;
+      const modeText  = (hasVoice && hasTyped) ? 'Speech + Typed'
+                      : hasVoice               ? 'Speech'
+                      : hasTyped               ? 'Typed'
+                      :                          'No Input';
+      const modeColor = (hasVoice && hasTyped) ? '#8b7ff5'
+                      : hasVoice               ? '#00d4b8'
+                      : hasTyped               ? '#f0a500'
+                      :                          '#7a8499';
+      const modeBadge = document.createElement('span');
+      modeBadge.style.cssText = `font-size:0.7rem;font-weight:700;letter-spacing:0.06em;
+        text-transform:uppercase;padding:2px 8px;border-radius:999px;
+        background:rgba(255,255,255,0.05);border:1px solid ${modeColor}44;
+        color:${modeColor};margin-left:8px;vertical-align:middle;`;
+      modeBadge.textContent = modeText;
+
       header.appendChild(qnum);
+      header.appendChild(modeBadge);
       header.appendChild(scoreEl);
 
       const txt = document.createElement('p');

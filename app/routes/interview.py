@@ -17,6 +17,22 @@ users = db.users
 interview_runs = db.interview_runs
 
 
+def combine_answers(transcript: str, typed: str) -> str:
+    """Merge voice transcript and typed input into one answer string."""
+    t = (transcript or "").strip()
+    d = (typed or "").strip()
+    if not t and not d:
+        return ""
+    if not t:
+        return d
+    if not d:
+        return t
+    # Avoid duplication when one is a substring of the other
+    if d.lower() in t.lower() or t.lower() in d.lower():
+        return t if len(t) >= len(d) else d
+    return f"{t}\n\n[Typed supplement]: {d}"
+
+
 @interview_bp.route('/interview')
 @login_required
 def interview_page():
@@ -106,9 +122,11 @@ def api_evaluate():
     question = data.get('question', '')
     answer = data.get('answer', '')
     question_number = data.get('questionNumber', 0)
+    typed_answer = data.get('typed_answer', '')
 
-    # Get evaluation from Gemini
-    result = evaluate_answer(question, answer)
+    # Combine voice transcript and typed input, then evaluate
+    combined_answer = combine_answers(answer, typed_answer)
+    result = evaluate_answer(question, combined_answer)
 
     # Compute a simple overall score on a 1-10 scale based on Gemini scores
     def _compute_overall_score(result_dict, answer_text: str) -> float:
@@ -135,17 +153,19 @@ def api_evaluate():
             return max(base_score, 5.0)
         return base_score
 
-    overall_score_10 = _compute_overall_score(result, answer)
+    overall_score_10 = _compute_overall_score(result, combined_answer)
     result['overall_score'] = overall_score_10
 
     # Store in session to track progress
     session_results = session.get('interview_results', [])
     session_results.append({
-        'question': question,
-        'answer': answer,
-        'transcript': answer,
-        'result': result,
-        'overall_score': overall_score_10,
+        'question':       question,
+        'answer':         combined_answer,   # backward-compat field; value is combined
+        'transcript':     answer,            # raw voice transcript
+        'typed':          typed_answer,      # raw typed input
+        'final':          combined_answer,   # explicit combined field
+        'result':         result,
+        'overall_score':  overall_score_10,
         'questionNumber': question_number
     })
     session['interview_results'] = session_results
@@ -155,7 +175,8 @@ def api_evaluate():
         try:
             all_skills    = session.get('skills', [])
             all_questions = session.get('interview_questions', [])
-            all_answers   = [r.get('answer', '') for r in session_results]
+            answer_map    = {r.get('questionNumber', i): r.get('answer', '') for i, r in enumerate(session_results)}
+            all_answers   = [answer_map.get(i, '') for i in range(len(all_questions))]
 
             # Comprehensive post-interview evaluation
             full_evaluation = evaluate_full_interview(all_skills, all_questions, all_answers)
@@ -176,6 +197,7 @@ def api_evaluate():
             result['redirect'] = url_for('interview.results_page')
         except Exception:
             current_app.logger.exception('Failed to persist interview run')
+            result['redirect'] = url_for('interview.results_page')
 
     return jsonify({'result': result, 'questionNumber': question_number})
 

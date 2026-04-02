@@ -7,6 +7,7 @@ let cameraEl;
 let startBtn;
 let stopBtn;
 let nextBtn;
+let typedAnswerInput;
 let questionText;
 let transcriptDiv;
 let feedbackDiv;
@@ -107,8 +108,10 @@ function showQuestion() {
   }
 
   // Reset UI state
+  accumulatedTranscript = "";
   transcriptDiv.textContent = "Press start to begin recording...";
   feedbackDiv.textContent = "";
+  if (typedAnswerInput) typedAnswerInput.value = "";
   startBtn.disabled = false;
   stopBtn.disabled = true;
   nextBtn.disabled = true;
@@ -323,7 +326,9 @@ async function stopRecording() {
     transcript = transcriptDiv.textContent;
   }
   if (placeholders.includes(transcript)) transcript = "";
-  if (transcript && transcript.length > 0) {
+  const typedVal = (typedAnswerInput && typedAnswerInput.value.trim()) || "";
+  const hasAnswer = transcript.length > 0 || typedVal.length > 0;
+  if (hasAnswer) {
     try {
       const evalRes = await fetch("/api/evaluate", {
         method: "POST",
@@ -332,6 +337,7 @@ async function stopRecording() {
           question: currentQuestion,
           answer: transcript,
           questionNumber: questionNumber,
+          typed_answer: typedVal,
         }),
       });
       const evalData = await evalRes.json();
@@ -416,6 +422,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   startBtn = document.getElementById("startTranscriptionBtn");
   stopBtn = document.getElementById("stopTranscriptionBtn");
   nextBtn = document.getElementById("nextBtn");
+  typedAnswerInput = document.getElementById("typedAnswerInput");
 
   // Initialize other UI element references
   questionText = document.getElementById("question-text");

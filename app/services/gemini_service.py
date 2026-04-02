@@ -9,7 +9,7 @@ except Exception:
     genai = None
 
 # --- Configuration ---
-GEMINI_API_KEY = "AIzaSyBbiV0V5Q_9Sb8dbZNa4hvdli3BNgVo-qo"
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
 
 # --- Logging setup ---
@@ -204,9 +204,9 @@ def evaluate_full_interview(skills: list, questions: list, answers: list) -> dic
 
 You are given:
 1. Skills extracted from the candidate's resume: {skills_csv}
-2. A full interview transcript with questions and candidate answers.
+2. Questions and Candidate Answers (combined from speech + typed input):
 
-TRANSCRIPT:
+CANDIDATE ANSWERS:
 {transcript_block}
 
 ---
@@ -215,6 +215,7 @@ For each question: identify issues (too generic, repetitive, vague) and rewrite 
 Assign a difficulty: Basic | Intermediate | Advanced.
 
 PART 2 — STRICT ANSWER EVALUATION
+The answers may be a combination of spoken transcripts and manually typed text. Evaluate based on the overall quality, correctness, and completeness of the combined answer.
 Score each answer strictly 0–100:
   0          = completely wrong, irrelevant, or no answer
   10–30      = very weak, shallow, mostly incorrect

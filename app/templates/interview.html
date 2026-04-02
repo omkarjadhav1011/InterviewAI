@@ -71,6 +71,23 @@
       <!-- AI Feedback (populated dynamically) -->
       <div id="feedback"></div>
 
+      <!-- Optional typed answer -->
+      <div id="typedAnswerArea">
+        <label for="typedAnswerInput" style="display:block;font-size:0.72rem;font-weight:600;
+          letter-spacing:0.08em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:8px;">
+          Typed Answer (optional)
+        </label>
+        <textarea id="typedAnswerInput" rows="4"
+          placeholder="Type your answer or add extra context here…"
+          style="width:100%;box-sizing:border-box;background:var(--bg-raised);border:1px solid var(--border);
+            border-radius:var(--r);padding:12px 16px;color:var(--text);font-size:0.88rem;
+            line-height:1.65;resize:vertical;outline:none;transition:border-color 0.2s ease;">
+        </textarea>
+      </div>
+      <style>
+        #typedAnswerInput:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,212,184,0.15); }
+      </style>
+
       <!-- Controls -->
       <div class="controls">
         <button id="startTranscriptionBtn">&#127908; Start Speaking</button>
