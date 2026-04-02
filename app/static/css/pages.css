@@ -1196,6 +1196,208 @@ video {
 }
 
 
+/* ╔══════════════════════════════════════════════════════╗
+   ║  RESULT PAGE — NEW EVALUATION COMPONENTS             ║
+   ╚══════════════════════════════════════════════════════╝ */
+
+/* ── Verdict Banner ──────────────────────────────────── */
+.verdict-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 24px 28px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    margin-bottom: 24px;
+    border-left-width: 4px;
+    animation: fadeUp 0.4s ease 0.1s both;
+}
+
+/* Color variants driven by verdict */
+.verdict-banner--strong-hire {
+    border-left-color: var(--accent);
+    background: rgba(0,212,184,0.04);
+}
+.verdict-banner--hire {
+    border-left-color: var(--success);
+    background: rgba(29,201,154,0.04);
+}
+.verdict-banner--weak-hire {
+    border-left-color: var(--amber);
+    background: rgba(240,160,48,0.04);
+}
+.verdict-banner--reject {
+    border-left-color: var(--error);
+    background: rgba(240,80,80,0.04);
+}
+
+.verdict-banner__left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+}
+
+/* Verdict pill label */
+.verdict-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 14px;
+    border-radius: var(--r-full);
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.verdict-pill--strong-hire { background: var(--accent-dim);  color: var(--accent); }
+.verdict-pill--hire         { background: var(--success-dim); color: var(--success); }
+.verdict-pill--weak-hire    { background: var(--amber-dim);   color: var(--amber); }
+.verdict-pill--reject       { background: var(--error-dim);   color: var(--error); }
+
+/* Final score number */
+.verdict-score {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1;
+    letter-spacing: -1px;
+}
+
+.verdict-score small {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0;
+}
+
+/* Verdict summary text */
+.verdict-summary {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.65;
+    flex: 1;
+    padding-top: 2px;
+}
+
+/* ── Skill Summary Section ───────────────────────────── */
+.skill-summary-section {
+    margin-bottom: 24px;
+    animation: fadeUp 0.4s ease 0.15s both;
+}
+
+.skill-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.skill-chip {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 16px;
+    border-radius: var(--r);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    cursor: default;
+    transition: all 0.2s ease;
+    min-width: 110px;
+}
+
+.skill-chip:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+.skill-chip__name {
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.skill-chip__strength {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+/* Strength color variants */
+.skill-chip--strong {
+    border-color: rgba(0,212,184,0.25);
+    background: rgba(0,212,184,0.04);
+}
+.skill-chip--strong .skill-chip__strength { color: var(--accent); }
+
+.skill-chip--medium {
+    border-color: rgba(240,160,48,0.25);
+    background: rgba(240,160,48,0.04);
+}
+.skill-chip--medium .skill-chip__strength { color: var(--amber); }
+
+.skill-chip--weak {
+    border-color: rgba(240,80,80,0.25);
+    background: rgba(240,80,80,0.04);
+}
+.skill-chip--weak .skill-chip__strength { color: var(--error); }
+
+/* ── Enhanced Feedback Card — issues + justification ─── */
+
+/* Issue tags row */
+.issue-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.issue-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    border-radius: var(--r-full);
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: var(--amber-dim);
+    color: var(--amber);
+    border: 1px solid rgba(240,160,48,0.2);
+}
+
+/* AI justification text */
+.justification-text {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    font-style: italic;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-soft);
+}
+
+/* Strict score badge (violet, distinct from teal overall-score) */
+.strict-score {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: var(--r-full);
+    background: var(--violet-dim);
+    color: var(--violet);
+    border: 1px solid rgba(139,127,245,0.2);
+    cursor: help;
+}
+
+
 /* ═══════════════════════════════════════════════════════
    Responsive
    ═══════════════════════════════════════════════════════ */
@@ -1207,10 +1409,18 @@ video {
 }
 
 @media (max-width: 640px) {
-    .stats-overview  { grid-template-columns: 1fr; }
+    .stats-overview    { grid-template-columns: 1fr; }
     .results-header h1 { font-size: 1.8rem; }
-    .auth-card       { padding: 32px 24px; }
-    .actions .btn    { width: 100%; justify-content: center; }
-    .metric-row      { grid-template-columns: 80px 1fr 30px; }
+    .auth-card         { padding: 32px 24px; }
+    .actions .btn      { width: 100%; justify-content: center; }
+    .metric-row        { grid-template-columns: 80px 1fr 30px; }
     .upload-heading h2 { font-size: 1.6rem; }
+
+    /* Verdict banner stacks vertically on small screens */
+    .verdict-banner {
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .verdict-score { font-size: 1.6rem; }
 }

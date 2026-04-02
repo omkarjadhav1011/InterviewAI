@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, current_app, session, url_for
 from flask_login import login_required, current_user
-from ..services.gemini_service import generate_questions, evaluate_answer
+from ..services.gemini_service import generate_questions, evaluate_answer, evaluate_full_interview
 from ..services.vapi_service import tts_synthesize, stt_transcribe
 from pymongo import MongoClient
 import os
@@ -150,15 +150,23 @@ def api_evaluate():
     })
     session['interview_results'] = session_results
 
-    # If this was the last question (5th), store the interview run as a single document
+    # If this was the last question (5th), run batch evaluation and persist
     if question_number >= 4:
         try:
+            all_skills    = session.get('skills', [])
+            all_questions = session.get('interview_questions', [])
+            all_answers   = [r.get('answer', '') for r in session_results]
+
+            # Comprehensive post-interview evaluation
+            full_evaluation = evaluate_full_interview(all_skills, all_questions, all_answers)
+
             run_doc = {
-                'user_email': current_user.email,
-                'created_at': datetime.datetime.utcnow(),
-                'skills': session.get('skills', []),
-                'questions': session.get('interview_questions', []),
-                'results': session_results,
+                'user_email':      current_user.email,
+                'created_at':      datetime.datetime.utcnow(),
+                'skills':          all_skills,
+                'questions':       all_questions,
+                'results':         session_results,
+                'full_evaluation': full_evaluation,
                 'summary': {
                     'total_questions': len(session_results),
                 }
@@ -177,9 +185,11 @@ def api_evaluate():
 def results_page():
     latest_run = interview_runs.find_one({'user_email': current_user.email}, sort=[('created_at', -1)])
     if latest_run:
-        results = latest_run.get('results', [])
+        results         = latest_run.get('results', [])
+        full_evaluation = latest_run.get('full_evaluation', None)
     else:
-        user_doc = users.find_one({'email': current_user.email})
-        results = user_doc.get('results', []) if user_doc else []
+        user_doc        = users.find_one({'email': current_user.email})
+        results         = user_doc.get('results', []) if user_doc else []
+        full_evaluation = None
 
-    return render_template('result.html', results=results)
+    return render_template('result.html', results=results, full_evaluation=full_evaluation)

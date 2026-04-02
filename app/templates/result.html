@@ -12,6 +12,11 @@
     <p>Your detailed analysis across all questions</p>
   </div>
 
+  <!-- ── [NEW] Verdict Banner ───────────────────────── -->
+  {% if full_evaluation %}
+  <div id="verdictBanner" class="verdict-banner" aria-live="polite"></div>
+  {% endif %}
+
   <!-- ── Stat Cards ─────────────────────────────────── -->
   <div class="stats-overview">
     <div class="stat-card">
@@ -30,6 +35,14 @@
       <div class="stat-label">Communication</div>
     </div>
   </div>
+
+  <!-- ── [NEW] Skill Summary ────────────────────────── -->
+  {% if full_evaluation %}
+  <div class="skill-summary-section">
+    <div class="section-label">Skills Assessment</div>
+    <div id="skillGrid" class="skill-grid"></div>
+  </div>
+  {% endif %}
 
   <!-- ── Detailed Breakdown ─────────────────────────── -->
   <div class="results-content">
@@ -59,8 +72,8 @@
 </div>
 
 <script>
-  // ─── Results rendering ─────────────────────────────
-  // Uses results passed from Flask via Jinja — do NOT rename template variable.
+  // ─── Existing per-answer results ──────────────────────────────────
+  // Do NOT rename — Flask passes this as `results`
   const results = {{ results|tojson }} || [];
 
   if (results.length > 0) {
@@ -69,7 +82,7 @@
       return v > 10 ? (v / 10) : v;
     };
 
-    // Compute averages
+    // Compute averages for stat cards
     const avg = (key) =>
       (results.reduce((s, r) => s + toDisplayScore(r.result && r.result[key]), 0) / results.length).toFixed(1);
 
@@ -80,15 +93,24 @@
     const chartDiv    = document.getElementById('minimalChart');
     const feedbackDiv = document.getElementById('resultsList');
 
+    // Build a lookup: index → strict answer evaluation (from full_evaluation)
+    const fullEval  = {{ (full_evaluation or {})|tojson }};
+    const strictMap = {};  // index → answer_evaluation entry
+    if (fullEval && fullEval.answer_evaluation) {
+      fullEval.answer_evaluation.forEach((ae, idx) => { strictMap[idx] = ae; });
+    }
+
     results.forEach((r, i) => {
-      const conf  = toDisplayScore(r.result && r.result.confidence)    || 0;
-      const tech  = toDisplayScore(r.result && r.result.technical)     || 0;
-      const comm  = toDisplayScore(r.result && r.result.communication) || 0;
+      const conf    = toDisplayScore(r.result && r.result.confidence)    || 0;
+      const tech    = toDisplayScore(r.result && r.result.technical)     || 0;
+      const comm    = toDisplayScore(r.result && r.result.communication) || 0;
       const overall = (r.overall_score !== undefined && r.overall_score !== null)
         ? r.overall_score
         : Number(((conf + tech + comm) / 3).toFixed(1));
 
-      // ── Performance bar block ──
+      const strict  = strictMap[i] || null;
+
+      // ── Performance bar block (unchanged IDs/classes) ──────────────
       const block = document.createElement('div');
       block.className = 'question-block';
       block.style.animationDelay = (i * 0.06) + 's';
@@ -122,11 +144,12 @@
         </div>
         <div style="margin-top:8px; text-align:right;">
           <span class="overall-score">${overall}/10</span>
+          ${strict ? `<span class="strict-score" title="AI strict score">${strict.score}/100</span>` : ''}
         </div>
       `;
       chartDiv.appendChild(block);
 
-      // ── Feedback card ──
+      // ── Feedback card ──────────────────────────────────────────────
       const card = document.createElement('div');
       card.className = 'feedback-card';
       card.style.animationDelay = (i * 0.07 + 0.1) + 's';
@@ -138,12 +161,12 @@
       qnum.className = 'question-number';
       qnum.textContent = `Question ${i + 1}`;
 
-      const score = document.createElement('span');
-      score.className = 'overall-score';
-      score.textContent = `${overall}/10`;
+      const scoreEl = document.createElement('span');
+      scoreEl.className = 'overall-score';
+      scoreEl.textContent = `${overall}/10`;
 
       header.appendChild(qnum);
-      header.appendChild(score);
+      header.appendChild(scoreEl);
 
       const txt = document.createElement('p');
       txt.className = 'feedback-text';
@@ -152,10 +175,33 @@
 
       card.appendChild(header);
       card.appendChild(txt);
+
+      // [NEW] Issues tags + justification from strict evaluation
+      if (strict) {
+        if (strict.issues && strict.issues.length) {
+          const issuesRow = document.createElement('div');
+          issuesRow.className = 'issue-tags';
+          strict.issues.forEach((issue) => {
+            const tag = document.createElement('span');
+            tag.className = 'issue-tag';
+            tag.textContent = issue;
+            issuesRow.appendChild(tag);
+          });
+          card.appendChild(issuesRow);
+        }
+
+        if (strict.justification) {
+          const just = document.createElement('p');
+          just.className = 'justification-text';
+          just.textContent = strict.justification;
+          card.appendChild(just);
+        }
+      }
+
       feedbackDiv.appendChild(card);
     });
 
-    // Animate bars in after a short delay (allows CSS transition to fire)
+    // Animate bars in after paint
     requestAnimationFrame(() => {
       setTimeout(() => {
         document.querySelectorAll('.bar[data-width]').forEach((bar) => {
@@ -163,6 +209,54 @@
         });
       }, 120);
     });
+  }
+
+  // ─── [NEW] Full evaluation — verdict + skill summary ──────────────
+  const fullEval = {{ (full_evaluation or {})|tojson }};
+
+  if (fullEval && fullEval.overall_evaluation) {
+    const oe      = fullEval.overall_evaluation;
+    const verdict = (oe.verdict || '').trim();
+    const score   = oe.final_score || 0;
+    const summary = oe.summary || '';
+
+    // Verdict banner
+    const banner = document.getElementById('verdictBanner');
+    if (banner) {
+      const variantMap = {
+        'Strong Hire': 'strong-hire',
+        'Hire':        'hire',
+        'Weak Hire':   'weak-hire',
+        'Reject':      'reject'
+      };
+      const variant = variantMap[verdict] || 'hire';
+      banner.classList.add(`verdict-banner--${variant}`);
+      banner.innerHTML = `
+        <div class="verdict-banner__left">
+          <span class="verdict-pill verdict-pill--${variant}">${verdict}</span>
+          <span class="verdict-score">${score}<small>/100</small></span>
+        </div>
+        <p class="verdict-summary">${summary}</p>
+      `;
+    }
+
+    // Skill summary chips
+    const grid = document.getElementById('skillGrid');
+    if (grid && fullEval.skill_summary) {
+      fullEval.skill_summary.forEach((s) => {
+        const strength  = (s.strength || 'Medium').toLowerCase().replace(/\s+/g, '-');
+        const iconMap   = { 'strong': '✓', 'medium': '~', 'weak': '✗' };
+        const icon      = iconMap[strength] || '~';
+        const chip = document.createElement('div');
+        chip.className = `skill-chip skill-chip--${strength}`;
+        chip.title = s.insight || '';
+        chip.innerHTML = `
+          <span class="skill-chip__name">${s.skill}</span>
+          <span class="skill-chip__strength">${icon} ${s.strength}</span>
+        `;
+        grid.appendChild(chip);
+      });
+    }
   }
 </script>
 
