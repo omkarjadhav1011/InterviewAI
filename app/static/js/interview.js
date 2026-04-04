@@ -26,6 +26,21 @@ let isRecording = false;
 let evaluationInProgress = false;
 let accumulatedTranscript = ""; // Accumulates final transcript segments from AssemblyAI
 
+// STT mode state
+let sttMode = "assemblyai"; // 'assemblyai' | 'whisper'
+let whisperInitialized = false;
+let whisperStatusEl = null;
+let sttModeSelect = null;
+
+const WHISPER_MSGS = {
+  loading: "Loading Whisper model\u2026",
+  downloading: "Downloading model (first time only)\u2026",
+  ready: "Whisper ready",
+  transcribing: "Transcribing\u2026",
+  error: "Whisper unavailable \u2014 using Web Speech API fallback",
+  "ready-fallback": "Using Web Speech API fallback",
+};
+
 // ======================================================
 // CAMERA + AUDIO SETUP
 // ======================================================
@@ -145,12 +160,27 @@ async function startRecording() {
   if (isRecording) return;
   isRecording = true;
 
-  transcriptDiv.textContent = "Listening...";
   feedbackDiv.textContent = "";
   startBtn.disabled = true;
   stopBtn.disabled = false;
-
   accumulatedTranscript = "";
+
+  // ── Whisper (offline) path ──────────────────────────
+  if (sttMode === "whisper") {
+    if (!window.WhisperSTT) {
+      transcriptDiv.textContent = "Whisper not available. Switch to AssemblyAI.";
+      isRecording = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      return;
+    }
+    transcriptDiv.textContent = "Recording\u2026 (click Stop to transcribe)";
+    await window.WhisperSTT.startRecording(mediaStream);
+    return;
+  }
+
+  // ── AssemblyAI (online) path ────────────────────────
+  transcriptDiv.textContent = "Listening...";
 
   try {
     const response = await fetch("/start_transcription", { method: "POST" });
@@ -241,6 +271,17 @@ function streamAudioToWebSocket() {
   };
 }
 
+function restoreStopBtn() {
+  try {
+    if (stopBtn && stopBtn.dataset && stopBtn.dataset._origHtml) {
+      stopBtn.innerHTML = stopBtn.dataset._origHtml;
+      delete stopBtn.dataset._origHtml;
+    }
+  } catch (e) {
+    console.warn("Could not restore stop button content", e);
+  }
+}
+
 // ======================================================
 // STOP TRANSCRIPTION + EVALUATE ANSWER
 // ======================================================
@@ -278,26 +319,37 @@ async function stopRecording() {
   if (websocket) websocket.close();
 
   let finalTranscript = "";
-  try {
-    const stopRes = await fetch("/stop_transcription", { method: "POST" });
-    const stopData = await stopRes.json();
-    finalTranscript =
-      stopData && stopData.transcript ? stopData.transcript : "";
-    console.log(
-      "Streaming session closed; server transcript length:",
-      finalTranscript.length,
-    );
-  } catch (err) {
-    console.error("Error stopping transcription:", err);
-  } finally {
-    // Restore stop button content
+  if (sttMode === "whisper") {
+    // ── Whisper path: decode + transcribe recorded audio ──
+    if (whisperStatusEl) {
+      whisperStatusEl.textContent = "Transcribing\u2026";
+      whisperStatusEl.style.display = "inline";
+    }
     try {
-      if (stopBtn && stopBtn.dataset && stopBtn.dataset._origHtml) {
-        stopBtn.innerHTML = stopBtn.dataset._origHtml;
-        delete stopBtn.dataset._origHtml;
-      }
-    } catch (e) {
-      console.warn("Could not restore stop button content", e);
+      finalTranscript = (await window.WhisperSTT?.stopRecording()) || "";
+    } catch (err) {
+      console.error("Whisper stopRecording error:", err);
+    }
+    if (whisperStatusEl) {
+      whisperStatusEl.textContent = "Whisper ready";
+      whisperStatusEl.style.display = "none";
+    }
+    restoreStopBtn();
+  } else {
+    // ── AssemblyAI path: fetch server transcript ──────────
+    try {
+      const stopRes = await fetch("/stop_transcription", { method: "POST" });
+      const stopData = await stopRes.json();
+      finalTranscript =
+        stopData && stopData.transcript ? stopData.transcript : "";
+      console.log(
+        "Streaming session closed; server transcript length:",
+        finalTranscript.length,
+      );
+    } catch (err) {
+      console.error("Error stopping transcription:", err);
+    } finally {
+      restoreStopBtn();
     }
   }
 
@@ -435,6 +487,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error("Required UI elements not found. Check IDs in HTML.");
     return;
   }
+
+  // STT mode selector
+  sttModeSelect = document.getElementById("sttModeSelect");
+  whisperStatusEl = document.getElementById("whisperStatusEl");
+
+  sttModeSelect?.addEventListener("change", async () => {
+    sttMode = sttModeSelect.value;
+    if (sttMode === "whisper" && !whisperInitialized && window.WhisperSTT) {
+      whisperInitialized = true;
+      await window.WhisperSTT.initWhisper((state) => {
+        if (!whisperStatusEl) return;
+        whisperStatusEl.textContent = WHISPER_MSGS[state] || "";
+        whisperStatusEl.style.display = state === "ready" ? "none" : "inline";
+      });
+    }
+  });
 
   // Attach event listeners
   startBtn.addEventListener("click", startRecording);

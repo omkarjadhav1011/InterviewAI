@@ -3,7 +3,11 @@
     "allow": [
       "Bash(python -c:*)",
       "Bash(pip install:*)",
-      "Bash(timeout 5 python:*)"
+      "Bash(timeout 5 python:*)",
+      "Bash(xargs wc:*)",
+      "Bash(python .claude/skills/ui-ux-pro-max/scripts/search.py \"professional interview SaaS dashboard AI assessment\" --design-system -p \"InterviewAI\")",
+      "Bash(python3 .claude/skills/ui-ux-pro-max/scripts/search.py \"professional interview SaaS dashboard AI assessment\" --design-system -p \"InterviewAI\")",
+      "Bash(py:*)"
     ]
   }
 }

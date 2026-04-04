@@ -88,6 +88,22 @@
         #typedAnswerInput:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,212,184,0.15); }
       </style>
 
+      <!-- STT Mode Selector -->
+      <div id="sttModeArea" style="margin-bottom:12px;">
+        <label for="sttModeSelect" style="display:block;font-size:0.72rem;font-weight:600;
+          letter-spacing:0.08em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:6px;">
+          Transcription Mode
+        </label>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <select id="sttModeSelect" style="background:var(--bg-raised);border:1px solid var(--border);
+            border-radius:var(--r);padding:6px 10px;color:var(--text);font-size:0.85rem;cursor:pointer;outline:none;">
+            <option value="assemblyai">AssemblyAI (online)</option>
+            <option value="whisper">Whisper (offline)</option>
+          </select>
+          <span id="whisperStatusEl" style="display:none;font-size:0.78rem;color:#00bcd4;"></span>
+        </div>
+      </div>
+
       <!-- Controls -->
       <div class="controls">
         <button id="startTranscriptionBtn">&#127908; Start Speaking</button>
@@ -100,6 +116,8 @@
 
 </div>
 
+<!-- Whisper STT (ES module — sets window.WhisperSTT; loaded lazily on mode switch) -->
+<script type="module" src="{{ url_for('static', filename='js/whisper_transcription.js') }}"></script>
 <!-- Interview logic (IDs preserved) -->
 <script src="{{ url_for('static', filename='js/interview.js') }}"></script>
 
