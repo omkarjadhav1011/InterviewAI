@@ -1,38 +1,229 @@
 {% extends 'base.html' %}
 
-{% block title %}Home | MockMinds{% endblock %}
+{% block title %}Dashboard | MockMinds{% endblock %}
 
 {% block content %}
-<section class="flex flex-col items-center justify-center text-center py-20 px-6 bg-gradient-to-br from-bg-dark to-bg-dark-elevated">
-    <div class="max-w-3xl animate-fadeIn">
-        <h1 class="text-4xl md:text-5xl font-extrabold mb-6 text-primary-yellow">
-            Welcome, {{ user.username if user else 'Guest' }} 👋
-        </h1>
-        <p class="text-lg text-text-secondary mb-8 leading-relaxed">
-            Practice AI-driven mock interviews, get instant feedback, and track your progress like never before.
-        </p>
-        <a href="{{ url_for('resume.upload') }}" 
-           class="bg-primary-yellow hover:bg-secondary-yellow text-bg-dark font-semibold px-8 py-3 rounded-full shadow-lg transition-transform transform hover:scale-105 duration-300">
-            🚀 Start Interview
-        </a>
-    </div>
-</section>
 
-<section class="py-16 px-6 bg-bg-dark-card text-center">
-    <h2 class="text-3xl font-bold text-primary-yellow mb-10">Why Choose MockMinds?</h2>
-    <div class="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-        <div class="p-6 bg-bg-dark-elevated rounded-2xl shadow-lg hover:shadow-xl transition">
-            <h3 class="text-xl font-semibold mb-3">🤖 AI-Powered Evaluation</h3>
-            <p class="text-text-tertiary">Our AI listens to your voice responses and gives actionable feedback to improve clarity and confidence.</p>
-        </div>
-        <div class="p-6 bg-bg-dark-elevated rounded-2xl shadow-lg hover:shadow-xl transition">
-            <h3 class="text-xl font-semibold mb-3">🎯 Smart Practice Sessions</h3>
-            <p class="text-text-tertiary">Practice targeted interview questions for coding, behavioral, and system design roles.</p>
-        </div>
-        <div class="p-6 bg-bg-dark-elevated rounded-2xl shadow-lg hover:shadow-xl transition">
-            <h3 class="text-xl font-semibold mb-3">📈 Personalized Progress</h3>
-            <p class="text-text-tertiary">Track your performance and get insights that help you prepare better every day.</p>
-        </div>
+<!-- ── Welcome Header ───────────────────────────────── -->
+<div class="dash-hero">
+  <div class="dash-hero__text">
+    <p class="dash-hero__greeting">Welcome back,</p>
+    <h1 class="dash-hero__name">{{ user.username if user else 'Guest' }}</h1>
+    <p class="dash-hero__sub">Ready to sharpen your interview skills? Pick up where you left off.</p>
+  </div>
+  <a href="{{ url_for('resume.upload') }}" class="dash-hero__cta">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>
+    </svg>
+    Start Interview
+  </a>
+</div>
+
+<!-- ── Stats Row ─────────────────────────────────────── -->
+<div class="dash-stats">
+
+  <div class="stat-tile">
+    <div class="stat-tile__icon stat-tile__icon--teal">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
     </div>
-</section>
+    <div class="stat-tile__body">
+      <div class="stat-tile__value" id="statSessions">—</div>
+      <div class="stat-tile__label">Sessions</div>
+    </div>
+  </div>
+
+  <div class="stat-tile">
+    <div class="stat-tile__icon stat-tile__icon--violet">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+    </div>
+    <div class="stat-tile__body">
+      <div class="stat-tile__value" id="statAvgScore">—</div>
+      <div class="stat-tile__label">Avg Score</div>
+    </div>
+  </div>
+
+  <div class="stat-tile">
+    <div class="stat-tile__icon stat-tile__icon--amber">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+      </svg>
+    </div>
+    <div class="stat-tile__body">
+      <div class="stat-tile__value" id="statSkills">—</div>
+      <div class="stat-tile__label">Skills Detected</div>
+    </div>
+  </div>
+
+  <div class="stat-tile">
+    <div class="stat-tile__icon stat-tile__icon--success">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+      </svg>
+    </div>
+    <div class="stat-tile__body">
+      <div class="stat-tile__value" id="statBestScore">—</div>
+      <div class="stat-tile__label">Best Score</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Main Grid: Quick Actions + Features ───────────── -->
+<div class="dash-grid">
+
+  <!-- Quick Actions -->
+  <div class="dash-panel">
+    <div class="section-label">Quick Actions</div>
+    <div class="quick-actions">
+
+      <a href="{{ url_for('resume.upload') }}" class="action-card action-card--primary">
+        <div class="action-card__icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <div class="action-card__body">
+          <div class="action-card__title">Upload Resume</div>
+          <div class="action-card__sub">Parse skills &amp; start a new session</div>
+        </div>
+        <svg class="action-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </a>
+
+      <a href="{{ url_for('interview.interview_page') }}" class="action-card">
+        <div class="action-card__icon action-card__icon--violet">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+          </svg>
+        </div>
+        <div class="action-card__body">
+          <div class="action-card__title">Continue Interview</div>
+          <div class="action-card__sub">Jump back into your session</div>
+        </div>
+        <svg class="action-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </a>
+
+    </div>
+  </div>
+
+  <!-- Features / Why MockMinds -->
+  <div class="dash-panel">
+    <div class="section-label">Why MockMinds</div>
+    <div class="feature-grid">
+
+      <div class="feature-card">
+        <div class="feature-card__icon feature-card__icon--teal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+          </svg>
+        </div>
+        <div class="feature-card__text">
+          <div class="feature-card__title">AI Evaluation</div>
+          <div class="feature-card__desc">Voice answers scored for confidence, technical depth &amp; communication.</div>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon feature-card__icon--violet">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <div class="feature-card__text">
+          <div class="feature-card__title">Smart Questions</div>
+          <div class="feature-card__desc">Gemini-generated questions tailored to your exact skill set.</div>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon feature-card__icon--amber">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+        </div>
+        <div class="feature-card__text">
+          <div class="feature-card__title">Detailed Analytics</div>
+          <div class="feature-card__desc">Track scores per question, see strengths and improvement areas.</div>
+        </div>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-card__icon feature-card__icon--success">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <div class="feature-card__text">
+          <div class="feature-card__title">Hire / No-Hire Verdict</div>
+          <div class="feature-card__desc">Get a hiring-panel-style verdict and final score at the end.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- ── How It Works ───────────────────────────────────── -->
+<div class="dash-panel dash-howto">
+  <div class="section-label">How It Works</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step__num">1</div>
+      <div class="step__body">
+        <div class="step__title">Upload Your Resume</div>
+        <div class="step__desc">PDF parsed instantly — skills extracted automatically.</div>
+      </div>
+    </div>
+    <div class="step__connector" aria-hidden="true"></div>
+    <div class="step">
+      <div class="step__num">2</div>
+      <div class="step__body">
+        <div class="step__title">Answer AI Questions</div>
+        <div class="step__desc">Speak or type — real-time transcription, no setup needed.</div>
+      </div>
+    </div>
+    <div class="step__connector" aria-hidden="true"></div>
+    <div class="step">
+      <div class="step__num">3</div>
+      <div class="step__body">
+        <div class="step__title">Review Your Results</div>
+        <div class="step__desc">Detailed breakdown, verdict, and feedback per answer.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  // Populate stat tiles from user data if available
+  {% if user %}
+  const skills = {{ (user.skills or []) | tojson }};
+  const results = {{ (user.latest_results or []) | tojson }};
+
+  document.getElementById('statSkills').textContent = skills.length || '—';
+
+  if (results && results.length) {
+    document.getElementById('statSessions').textContent = results.length;
+    const scores = results.map(r => r.overall_score).filter(s => s != null);
+    if (scores.length) {
+      const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+      const best = Math.max(...scores).toFixed(1);
+      document.getElementById('statAvgScore').textContent = avg + '/10';
+      document.getElementById('statBestScore').textContent = best + '/10';
+    }
+  }
+  {% endif %}
+})();
+</script>
 {% endblock %}
