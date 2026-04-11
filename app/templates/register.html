@@ -27,7 +27,7 @@
       </div>
 
       <!-- Form -->
-      <form method="post" action="register" class="auth-form">
+      <form method="post" action="{{ url_for('auth.register') }}" class="auth-form">
 
         <div class="field">
           <label for="username" class="field__label">Username</label>

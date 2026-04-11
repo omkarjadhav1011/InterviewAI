@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   try{
     // highlight the current nav link
     const currentPath = window.location.pathname;
-    document.querySelectorAll('.nav-link').forEach(link => {
+    document.querySelectorAll('.app-nav__link').forEach(link => {
       if(link.getAttribute('href') === currentPath){
         link.classList.add('active');
       }
@@ -64,7 +64,7 @@ class CodeInterviewAI {
 
   setupNavigation() {
     const currentPath = window.location.pathname
-    const navLinks = document.querySelectorAll(".nav-link")
+    const navLinks = document.querySelectorAll(".app-nav__link")
 
     navLinks.forEach((link) => {
       if (link.getAttribute("href") === currentPath) {
@@ -312,7 +312,11 @@ class CodeInterviewAI {
     const textExplanation = document.getElementById("text-explanation")
 
     if (transcriptionDiv) {
-      transcriptionDiv.innerHTML = `<strong>Transcription:</strong> ${transcription}`
+      transcriptionDiv.textContent = '';
+      const strong = document.createElement('strong');
+      strong.textContent = 'Transcription: ';
+      transcriptionDiv.appendChild(strong);
+      transcriptionDiv.appendChild(document.createTextNode(transcription));
       transcriptionDiv.classList.remove("hidden")
     }
 

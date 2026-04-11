@@ -2,19 +2,10 @@ from flask import Blueprint, render_template, request, jsonify, current_app, ses
 from flask_login import login_required, current_user
 from ..services.gemini_service import generate_questions, evaluate_answer, evaluate_full_interview
 from ..services.vapi_service import tts_synthesize, stt_transcribe
-from pymongo import MongoClient
-import os
+from ..extensions import get_db
 import datetime
 
 interview_bp = Blueprint('interview', __name__)
-
-# TODO: share DB connection
-MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/interview_app')
-client = MongoClient(MONGO_URI)
-db = client.get_default_database() if client else client['interview_app']
-users = db.users
-# New collection for storing interview runs as separate documents
-interview_runs = db.interview_runs
 
 
 def combine_answers(transcript: str, typed: str) -> str:
@@ -27,7 +18,6 @@ def combine_answers(transcript: str, typed: str) -> str:
         return d
     if not d:
         return t
-    # Avoid duplication when one is a substring of the other
     if d.lower() in t.lower() or t.lower() in d.lower():
         return t if len(t) >= len(d) else d
     return f"{t}\n\n[Typed supplement]: {d}"
@@ -36,6 +26,7 @@ def combine_answers(transcript: str, typed: str) -> str:
 @interview_bp.route('/interview')
 @login_required
 def interview_page():
+    users = get_db().users
     user_doc = users.find_one({'email': current_user.email})
     return render_template('interview.html', user=user_doc)
 
@@ -44,9 +35,10 @@ def interview_page():
 @login_required
 def api_get_question():
     try:
+        users = get_db().users
         user_doc = users.find_one({'email': current_user.email})
-        keywords = user_doc.get('keywords', []) if user_doc else []
-        q = generate_questions(keywords, count=7)
+        skills = user_doc.get('skills', []) if user_doc else []
+        q = generate_questions(skills, count=7)
         return jsonify({'status': 'ok', 'questions': q})
     except Exception:
         current_app.logger.exception('Failed to generate questions')
@@ -69,6 +61,7 @@ def get_questions():
 
     skills = session.get('skills', [])
     if not skills:
+        users = get_db().users
         user_doc = users.find_one({'email': current_user.email})
         if user_doc:
             skills = user_doc.get('skills', [])
@@ -83,20 +76,22 @@ def get_questions():
             current_app.logger.exception('Failed to generate questions from skills')
             questions = []
 
-    current_question = questions[question_number] if questions and question_number < len(questions) else None
+    total = len(questions) if questions else 0
+    current_question = questions[question_number] if questions and question_number < total else None
+    is_last = question_number >= (total - 1) if total > 0 else False
 
     return jsonify({
         'status': 'ok',
         'currentQuestion': current_question,
         'questionNumber': question_number,
-        'totalQuestions': len(questions),
+        'totalQuestions': total,
         'progress': {
             'current': question_number + 1,
-            'total': 5,
-            'completed': question_number / 5 * 100
+            'total': total,
+            'completed': (question_number / total * 100) if total > 0 else 0
         },
         'skills': skills,
-        'isLastQuestion': question_number >= 4
+        'isLastQuestion': is_last
     })
 
 
@@ -122,7 +117,6 @@ def api_stt():
         return jsonify({'status': 'error', 'error': 'no audio'}), 400
     audio = request.files['audio']
     transcript = stt_transcribe(audio)
-    # VAPI returns error strings on failure rather than raising
     if transcript and (transcript.startswith('Error:') or transcript.startswith('STT failed:')):
         current_app.logger.warning('STT service error: %s', transcript)
         return jsonify({'status': 'error', 'error': 'transcription failed'}), 503
@@ -143,20 +137,19 @@ def api_evaluate():
 
     if not question:
         return jsonify({'status': 'error', 'error': 'question is required'}), 400
-    if not isinstance(question_number, int) or not (0 <= question_number <= 4):
-        return jsonify({'status': 'error', 'error': 'questionNumber must be 0–4'}), 400
+    if not isinstance(question_number, int) or question_number < 0:
+        return jsonify({'status': 'error', 'error': 'invalid questionNumber'}), 400
 
     # Combine voice transcript and typed input, then evaluate
     combined_answer = combine_answers(answer, typed_answer)
     result = evaluate_answer(question, combined_answer)
 
-    # Compute a simple overall score on a 1-10 scale based on Gemini scores
     def _compute_overall_score(result_dict, answer_text: str) -> float:
         try:
             c = float(result_dict.get('confidence', 0))
             t = float(result_dict.get('technical', 0))
             com = float(result_dict.get('communication', 0))
-        except Exception:
+        except (ValueError, TypeError):
             c, t, com = 0.0, 0.0, 0.0
 
         words = len((answer_text or "").split())
@@ -166,7 +159,7 @@ def api_evaluate():
         if words <= 2:
             return 2.0
 
-        avg_pct = (c + t + com) / 3.0  # 0-100
+        avg_pct = (c + t + com) / 3.0
         base_score = round(max(1.0, min(10.0, avg_pct / 10.0)), 1)
 
         if avg_pct >= 75:
@@ -178,29 +171,35 @@ def api_evaluate():
     overall_score_10 = _compute_overall_score(result, combined_answer)
     result['overall_score'] = overall_score_10
 
-    # Store in session to track progress
+    # Store in session to track progress (cap to avoid unbounded growth)
     session_results = session.get('interview_results', [])
     session_results.append({
         'question':       question,
-        'answer':         combined_answer,   # backward-compat field; value is combined
-        'transcript':     answer,            # raw voice transcript
-        'typed':          typed_answer,      # raw typed input
-        'final':          combined_answer,   # explicit combined field
+        'answer':         combined_answer,
+        'transcript':     answer,
+        'typed':          typed_answer,
+        'final':          combined_answer,
         'result':         result,
         'overall_score':  overall_score_10,
         'questionNumber': question_number
     })
-    session['interview_results'] = session_results
+    # Safety cap: keep only latest N results where N = total questions
+    total_q = len(session.get('interview_questions', []))
+    max_results = max(total_q, 10)
+    session['interview_results'] = session_results[-max_results:]
 
-    # If this was the last question (5th), run batch evaluation and persist
-    if question_number >= 4:
+    # Determine if this is the last question
+    total_questions = len(session.get('interview_questions', []))
+    is_last = question_number >= (total_questions - 1) if total_questions > 0 else question_number >= 4
+
+    if is_last:
         try:
+            db = get_db()
             all_skills    = session.get('skills', [])
             all_questions = session.get('interview_questions', [])
             answer_map    = {r.get('questionNumber', i): r.get('answer', '') for i, r in enumerate(session_results)}
             all_answers   = [answer_map.get(i, '') for i in range(len(all_questions))]
 
-            # Comprehensive post-interview evaluation
             full_evaluation = evaluate_full_interview(all_skills, all_questions, all_answers)
 
             run_doc = {
@@ -214,7 +213,7 @@ def api_evaluate():
                     'total_questions': len(session_results),
                 }
             }
-            interview_runs.insert_one(run_doc)
+            db.interview_runs.insert_one(run_doc)
             session.pop('interview_results', None)
         except Exception:
             current_app.logger.exception('Failed to persist interview run')
@@ -227,12 +226,13 @@ def api_evaluate():
 @interview_bp.route('/results')
 @login_required
 def results_page():
-    latest_run = interview_runs.find_one({'user_email': current_user.email}, sort=[('created_at', -1)])
+    db = get_db()
+    latest_run = db.interview_runs.find_one({'user_email': current_user.email}, sort=[('created_at', -1)])
     if latest_run:
         results         = latest_run.get('results', [])
         full_evaluation = latest_run.get('full_evaluation', None)
     else:
-        user_doc        = users.find_one({'email': current_user.email})
+        user_doc        = db.users.find_one({'email': current_user.email})
         results         = user_doc.get('results', []) if user_doc else []
         full_evaluation = None
 

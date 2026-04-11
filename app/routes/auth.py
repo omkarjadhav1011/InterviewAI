@@ -1,19 +1,13 @@
 import re
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user, UserMixin
-from pymongo import MongoClient
-import os
 import bcrypt
+
+from ..extensions import get_db
 
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 auth_bp = Blueprint('auth', __name__)
-
-# configure MongoDB client
-MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/interview_app')
-client = MongoClient(MONGO_URI)
-db = client.get_default_database() if client else client['interview_app']
-users = db.users
 
 
 class User(UserMixin):
@@ -27,6 +21,7 @@ class User(UserMixin):
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
+        users = get_db().users
         username = request.form.get('username', '').strip()
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
@@ -43,7 +38,7 @@ def register():
             flash('Email already registered')
             return redirect(url_for('auth.register'))
         pw_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-        users.insert_one({'username': username, 'email': email, 'password': pw_hash, 'keywords': [], 'results': []})
+        users.insert_one({'username': username, 'email': email, 'password': pw_hash, 'skills': [], 'results': []})
         flash('Registered. Please login.')
         return redirect(url_for('auth.login'))
     return render_template('register.html')
@@ -52,6 +47,7 @@ def register():
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
+        users = get_db().users
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
         if not email or not password:

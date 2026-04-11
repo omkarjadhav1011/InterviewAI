@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(bash /c/Users/nonst/.claude/statusline-command.sh)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git -C /c/Users/nonst/Downloads/project/project log --oneline -5)",
+      "Bash(git -C /c/Users/nonst/Downloads/project/project ls-files)",
+      "Bash(python -c \"from app import create_app; app = create_app\\(\\); print\\('App created successfully'\\)\")"
     ]
   }
 }

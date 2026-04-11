@@ -99,7 +99,7 @@
 
 <script>
   // ─── Existing per-answer results ──────────────────────────────────
-  const results = {{ results|tojson }} || [];
+  const results = {{ (results or [])|tojson }};
 
   if (results.length > 0) {
     const toDisplayScore = (v) => {
@@ -249,6 +249,13 @@
     });
   }
 
+  // Helper to escape HTML entities
+  function escHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
+  }
+
   // ─── Full evaluation — verdict + skill summary ──────────────
   const fullEval = {{ (full_evaluation or {})|tojson }};
 
@@ -270,10 +277,10 @@
       banner.classList.add(`verdict-banner--${variant}`);
       banner.innerHTML = `
         <div class="verdict-banner__left">
-          <span class="verdict-pill verdict-pill--${variant}">${verdict}</span>
-          <span class="verdict-score">${score}<small>/100</small></span>
+          <span class="verdict-pill verdict-pill--${variant}">${escHtml(verdict)}</span>
+          <span class="verdict-score">${Number(score)}<small>/100</small></span>
         </div>
-        <p class="verdict-summary">${summary}</p>
+        <p class="verdict-summary">${escHtml(summary)}</p>
       `;
     }
 
@@ -287,8 +294,8 @@
         chip.className = `skill-chip skill-chip--${strength}`;
         chip.title = s.insight || '';
         chip.innerHTML = `
-          <span class="skill-chip__name">${s.skill}</span>
-          <span class="skill-chip__strength">${icon} ${s.strength}</span>
+          <span class="skill-chip__name">${escHtml(s.skill)}</span>
+          <span class="skill-chip__strength">${icon} ${escHtml(s.strength)}</span>
         `;
         grid.appendChild(chip);
       });

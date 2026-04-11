@@ -19,6 +19,7 @@ def stt_transcribe(audio_file):
             "https://api.vapi.ai/speech-to-text",
             headers=headers,
             data=audio_bytes,
+            timeout=15,
         )
         if response.ok:
             return response.json().get("transcript", "")
@@ -45,6 +46,7 @@ def tts_synthesize(text):
             "https://api.vapi.ai/text-to-speech",
             headers=headers,
             json=data,
+            timeout=15,
         )
         if response.ok:
             return response.json().get("audio_url", None)

@@ -37,8 +37,7 @@ def get_ws_url() -> dict:
             logging.info("Created real-time transcription token (v3)")
         else:
             logging.error("Failed to get token: %s %s", response.status_code, response.text)
-            # Fallback: let the browser use the API key directly
-            token = API_KEY
+            return {"status": "error", "error": "Could not obtain transcription token"}
 
         ws_url = (
             f"wss://streaming.assemblyai.com/v3/ws"

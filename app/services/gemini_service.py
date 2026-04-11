@@ -15,20 +15,15 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 # --- Logging setup ---
 logger = logging.getLogger(__name__)
 
-# Informational output
 if genai is None:
     logger.warning("Google Generative AI client not installed. Using fallback.")
-    print("Gemini client not installed; using fallback question generator.")
 else:
     logger.info("Google Generative AI client is available.")
-    print("Gemini client available.")
 
 if GEMINI_API_KEY:
     logger.info("GEMINI_API_KEY found in environment.")
-    print("Gemini API key loaded from environment.")
 else:
-    logger.warning("GEMINI_API_KEY not set.")
-    print("Gemini API key is NOT set. Gemini calls will be skipped.")
+    logger.warning("GEMINI_API_KEY not set. Gemini calls will be skipped.")
 
 
 # -------------------------------------------------------------------
@@ -69,24 +64,21 @@ Output format:
 - No numbering, no bullets, no extra text.
 """
 
-            print("Gemini: Sending API request...")
+            logger.info("Gemini: Sending API request...")
             response = model.generate_content(prompt)
-            print("Gemini: Response received.")
+            logger.info("Gemini: Response received.")
 
-            if hasattr(response, "text") and response.text.strip():
+            if response and hasattr(response, "text") and response.text and response.text.strip():
                 text = response.text.strip()
                 questions = [line.strip("0123456789. )-").strip() for line in text.splitlines() if line.strip()]
                 logger.info("Gemini returned %d questions.", len(questions))
-                print(f"Gemini: returned {len(questions)} generated questions.")
                 return questions[:count]
 
-        except Exception as e:
+        except Exception:
             logger.exception("Gemini API call failed; using fallback generator.")
-            print(f"Gemini API call failed ({type(e).__name__}): {e}")
 
     # --- Fallback question generator ---
     logger.info("Using fallback question generator.")
-    print("Using fallback question generator.")
     return [
         f"Explain your experience with {kw}. Provide an example project and technical details."
         for kw in (skills * (count // len(skills) + 1))[:count]
@@ -101,6 +93,10 @@ def evaluate_answer(question: str, answer: str) -> dict:
     Evaluates the candidate's answer using Gemini API.
     Returns detailed feedback and scores.
     """
+    # Truncate inputs to prevent API quota abuse
+    question = (question or '')[:1000]
+    answer = (answer or '')[:5000]
+
     if not genai or not GEMINI_API_KEY:
         logger.warning("Gemini API not available; using fallback evaluator")
         return _fallback_evaluation(question, answer)

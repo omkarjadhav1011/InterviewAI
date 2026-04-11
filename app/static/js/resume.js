@@ -67,23 +67,38 @@ document.getElementById('resumeForm').addEventListener('submit', async (e) => {
   // Normalize to array of strings.
   const skills = data.skills || data.keywords || [];
   if (Array.isArray(skills) && skills.length) {
-    skillsContainer.innerHTML = `
-      <h3>Extracted Skills</h3>
-      <div class="keyword-list">
-        ${skills.map(skill => `<span class="keyword">${skill}</span>`).join('')}
-      </div>
-    `;
+    skillsContainer.innerHTML = '';
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Extracted Skills';
+    skillsContainer.appendChild(h3);
+    const listDiv = document.createElement('div');
+    listDiv.className = 'keyword-list';
+    skills.forEach(skill => {
+      const span = document.createElement('span');
+      span.className = 'keyword';
+      span.textContent = skill;
+      listDiv.appendChild(span);
+    });
+    skillsContainer.appendChild(listDiv);
   } else if (typeof skills === 'string' && skills.trim()) {
-    skillsContainer.innerHTML = `<h3>Extracted Skills</h3><p>${skills}</p>`;
+    skillsContainer.innerHTML = '';
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Extracted Skills';
+    skillsContainer.appendChild(h3);
+    const p = document.createElement('p');
+    p.textContent = skills;
+    skillsContainer.appendChild(p);
   } else {
-    skillsContainer.innerHTML = '<p>No skills found.</p>';
+    skillsContainer.innerHTML = '';
+    const p = document.createElement('p');
+    p.textContent = 'No skills found.';
+    skillsContainer.appendChild(p);
   }
 
   // Create Start Interview button dynamically
-  // Use relative link to interview page
   const btn = document.createElement('a');
   btn.href = '/interview';
   btn.className = 'start-btn';
-  btn.innerText = '🎤 Start Interview';
+  btn.textContent = 'Start Interview';
   skillsContainer.appendChild(btn);
 });
