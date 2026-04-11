@@ -1,8 +1,9 @@
+import os
 import requests
 import logging
 
 # ─── Configuration ───────────────────────────────────────────────
-API_KEY = "2b02b14d7451446a8d217f2bb8fa9054"
+API_KEY = os.getenv("ASSEMBLYAI_API_KEY", "")
 SAMPLE_RATE = 16000
 
 # ─── Logging Setup ───────────────────────────────────────────────
@@ -11,71 +12,43 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# ─── Global Variables ────────────────────────────────────────────
-final_transcript = ""
 
-
-def start_transcription():
+def get_ws_url() -> dict:
     """
-    Request a temporary authentication token from AssemblyAI and return
-    a v3 Universal-Streaming WebSocket URL for the browser to connect to.
+    Request a temporary auth token from AssemblyAI and return the v3
+    Universal-Streaming WebSocket URL.  Stateless — caller manages transcript.
     """
-    global final_transcript
-    final_transcript = ""
+    if not API_KEY:
+        return {"status": "error", "error": "ASSEMBLYAI_API_KEY not configured"}
 
     try:
-        # Create a temporary token for browser-side auth
         response = requests.post(
             "https://api.assemblyai.com/v2/realtime/token",
             json={"expires_in": 3600},
             headers={
                 "authorization": API_KEY,
                 "content-type": "application/json"
-            }
+            },
+            timeout=10,
         )
 
         if response.ok:
             token = response.json().get("token")
-            # Use the v3 Universal-Streaming endpoint
-            ws_url = (
-                f"wss://streaming.assemblyai.com/v3/ws"
-                f"?sample_rate={SAMPLE_RATE}"
-                f"&token={token}"
-                f"&encoding=pcm_s16le"
-                f"&language=en"
-            )
             logging.info("Created real-time transcription token (v3)")
-            return {"status": "started", "ws_url": ws_url}
         else:
-            logging.error(f"Failed to get token: {response.status_code} {response.text}")
-            # Fallback: let the browser connect directly with the API key
-            ws_url = (
-                f"wss://streaming.assemblyai.com/v3/ws"
-                f"?sample_rate={SAMPLE_RATE}"
-                f"&token={API_KEY}"
-                f"&encoding=pcm_s16le"
-                f"&language=en"
-            )
-            logging.info("Using API key directly for WebSocket auth")
-            return {"status": "started", "ws_url": ws_url}
+            logging.error("Failed to get token: %s %s", response.status_code, response.text)
+            # Fallback: let the browser use the API key directly
+            token = API_KEY
+
+        ws_url = (
+            f"wss://streaming.assemblyai.com/v3/ws"
+            f"?sample_rate={SAMPLE_RATE}"
+            f"&token={token}"
+            f"&encoding=pcm_s16le"
+            f"&language=en"
+        )
+        return {"status": "started", "ws_url": ws_url}
 
     except Exception as e:
-        logging.error(f"Failed to start transcription: {e}")
+        logging.error("Failed to start transcription: %s", e)
         return {"status": "error", "error": str(e)}
-
-
-def stop_transcription():
-    """
-    Stop transcription. The WebSocket is managed client-side,
-    so this returns the accumulated transcript.
-    """
-    global final_transcript
-    logging.info("Transcription stop requested")
-    return {"status": "stopped", "transcript": final_transcript.strip()}
-
-
-def update_transcript(text):
-    """Accumulate transcript text sent from the client."""
-    global final_transcript
-    if text:
-        final_transcript += text + " "

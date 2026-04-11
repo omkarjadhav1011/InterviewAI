@@ -1,8 +1,11 @@
+import re
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user, UserMixin
 from pymongo import MongoClient
 import os
 import bcrypt
+
+_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -24,9 +27,18 @@ class User(UserMixin):
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        password = request.form['password']
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        if not username or len(username) > 80:
+            flash('Username is required (max 80 characters)')
+            return redirect(url_for('auth.register'))
+        if not _EMAIL_RE.match(email):
+            flash('Enter a valid email address')
+            return redirect(url_for('auth.register'))
+        if len(password) < 8:
+            flash('Password must be at least 8 characters')
+            return redirect(url_for('auth.register'))
         if users.find_one({'email': email}):
             flash('Email already registered')
             return redirect(url_for('auth.register'))
@@ -40,8 +52,11 @@ def register():
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        if not email or not password:
+            flash('Email and password are required')
+            return redirect(url_for('auth.login'))
         user_doc = users.find_one({'email': email})
         if user_doc and bcrypt.checkpw(password.encode('utf-8'), user_doc['password']):
             user = User(user_doc)

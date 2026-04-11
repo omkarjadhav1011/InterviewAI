@@ -11,7 +11,8 @@ def create_app(test_config=None):
     app = Flask(__name__, static_folder='static', template_folder='templates')
     app.config.from_mapping(
         SECRET_KEY=os.getenv('SECRET_KEY', 'dev-secret'),
-        UPLOAD_FOLDER=os.path.join(os.path.dirname(__file__), 'static', 'uploads')
+        UPLOAD_FOLDER=os.path.join(os.path.dirname(__file__), 'static', 'uploads'),
+        MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 16 MB upload limit
     )
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
@@ -31,11 +32,29 @@ def create_app(test_config=None):
     app.register_blueprint(interview_bp)
     app.register_blueprint(transcription_bp)              # 👈 NEW
 
+    # ─── Health check ──────────────────────────────────────────────
+    from pymongo import MongoClient
+    @app.route('/health')
+    def health():
+        try:
+            mc = MongoClient(os.getenv('MONGO_URI', 'mongodb://localhost:27017/interview_app'),
+                             serverSelectionTimeoutMS=2000)
+            mc.admin.command('ping')
+            db_ok = True
+        except Exception:
+            db_ok = False
+        status = 200 if db_ok else 503
+        return jsonify({"status": "ok" if db_ok else "degraded", "db": db_ok}), status
+
     # -----------------------------
     # ✅ Global Error Handlers
     # -----------------------------
     def _is_api(req):
         return req.path.startswith('/api/') or req.is_json
+
+    @app.errorhandler(413)
+    def request_entity_too_large(e):
+        return jsonify({"status": "error", "error": "file too large (max 16 MB)"}), 413
 
     @app.errorhandler(400)
     def bad_request(e):

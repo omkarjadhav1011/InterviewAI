@@ -1,23 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -c:*)",
-      "Bash(pip install:*)",
-      "Bash(timeout 5 python:*)",
-      "Bash(xargs wc:*)",
-      "Bash(python .claude/skills/ui-ux-pro-max/scripts/search.py \"professional interview SaaS dashboard AI assessment\" --design-system -p \"InterviewAI\")",
-      "Bash(python3 .claude/skills/ui-ux-pro-max/scripts/search.py \"professional interview SaaS dashboard AI assessment\" --design-system -p \"InterviewAI\")",
-      "Bash(py:*)",
-      "Bash(npm list:*)",
-      "Bash(npm install:*)",
-      "Bash(node create_presentation.js)",
-      "Bash(mv create_presentation.js create_presentation.cjs)",
-      "Bash(node create_presentation.cjs)",
-      "Bash(npm root:*)",
-      "Bash(node -e \"require\\('pptxgenjs'\\)\")",
-      "Bash(NODE_PATH=\"C:\\\\nvm4w\\\\nodejs\\\\node_modules\" node create_presentation.cjs)",
-      "Bash(node -e ':*)",
-      "Bash(wc:*)"
+      "Bash(bash /c/Users/nonst/.claude/statusline-command.sh)",
+      "Bash(python3:*)"
     ]
   }
 }

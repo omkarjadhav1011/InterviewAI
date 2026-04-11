@@ -143,8 +143,8 @@ def api_evaluate():
 
     if not question:
         return jsonify({'status': 'error', 'error': 'question is required'}), 400
-    if not isinstance(question_number, int) or question_number < 0:
-        return jsonify({'status': 'error', 'error': 'invalid questionNumber'}), 400
+    if not isinstance(question_number, int) or not (0 <= question_number <= 4):
+        return jsonify({'status': 'error', 'error': 'questionNumber must be 0–4'}), 400
 
     # Combine voice transcript and typed input, then evaluate
     combined_answer = combine_answers(answer, typed_answer)

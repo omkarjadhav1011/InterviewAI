@@ -66,17 +66,16 @@ def upload():
             # Extract skills using the combined helper that merges DB matches and keywords
             skills = parse_resume_to_skills(path)
             current_app.logger.info('Extracted %d skills from resume', len(skills))
-            print(f'Resume parsing: found {len(skills)} skills')
 
             # Persist skills to user's record (non-blocking in terms of response formatting)
             try:
                 users.update_one(
-                    {'email': current_user.email}, 
+                    {'email': current_user.email},
                     {'$set': {'skills': skills}}
                 )
                 # Store in session for immediate use in interview
                 session['skills'] = skills
-                print('Resume skills: stored in session and DB')
+                current_app.logger.info('Resume skills stored in session and DB')
             except Exception:
                 current_app.logger.exception('Failed to update user skills in DB')
 
@@ -85,7 +84,7 @@ def upload():
             try:
                 questions = generate_questions(skills, count=5)
                 session['interview_questions'] = questions
-                print(f'Generated {len(questions)} questions from skills')
+                current_app.logger.info('Generated %d questions from skills', len(questions))
             except Exception:
                 current_app.logger.exception('Failed to generate questions')
 
