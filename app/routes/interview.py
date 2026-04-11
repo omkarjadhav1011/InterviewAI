@@ -43,10 +43,14 @@ def interview_page():
 @interview_bp.route('/api/get_question')
 @login_required
 def api_get_question():
-    user_doc = users.find_one({'email': current_user.email})
-    keywords = user_doc.get('keywords', [])
-    q = generate_questions(keywords, count=7)
-    return jsonify({'questions': q})
+    try:
+        user_doc = users.find_one({'email': current_user.email})
+        keywords = user_doc.get('keywords', []) if user_doc else []
+        q = generate_questions(keywords, count=7)
+        return jsonify({'status': 'ok', 'questions': q})
+    except Exception:
+        current_app.logger.exception('Failed to generate questions')
+        return jsonify({'status': 'error', 'error': 'failed to generate questions'}), 500
 
 
 @interview_bp.route('/get_questions')
@@ -75,7 +79,6 @@ def get_questions():
             questions = generate_questions(skills, count=5)
             session['interview_questions'] = questions
             current_app.logger.info('Generated %d new questions', len(questions))
-            print(f'Generated {len(questions)} questions')
         except Exception:
             current_app.logger.exception('Failed to generate questions from skills')
             questions = []
@@ -83,6 +86,7 @@ def get_questions():
     current_question = questions[question_number] if questions and question_number < len(questions) else None
 
     return jsonify({
+        'status': 'ok',
         'currentQuestion': current_question,
         'questionNumber': question_number,
         'totalQuestions': len(questions),
@@ -99,30 +103,48 @@ def get_questions():
 @interview_bp.route('/api/tts', methods=['POST'])
 @login_required
 def api_tts():
-    data = request.json
-    text = data.get('text', '')
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'status': 'error', 'error': 'missing JSON body'}), 400
+    text = data.get('text', '').strip()
+    if not text:
+        return jsonify({'status': 'error', 'error': 'text is required'}), 400
     audio_url = tts_synthesize(text)
-    return jsonify({'audio_url': audio_url})
+    if audio_url is None:
+        return jsonify({'status': 'error', 'error': 'TTS service unavailable'}), 503
+    return jsonify({'status': 'ok', 'audio_url': audio_url})
 
 
 @interview_bp.route('/api/stt', methods=['POST'])
 @login_required
 def api_stt():
     if 'audio' not in request.files:
-        return jsonify({'error': 'no audio'}), 400
+        return jsonify({'status': 'error', 'error': 'no audio'}), 400
     audio = request.files['audio']
     transcript = stt_transcribe(audio)
-    return jsonify({'transcript': transcript})
+    # VAPI returns error strings on failure rather than raising
+    if transcript and (transcript.startswith('Error:') or transcript.startswith('STT failed:')):
+        current_app.logger.warning('STT service error: %s', transcript)
+        return jsonify({'status': 'error', 'error': 'transcription failed'}), 503
+    return jsonify({'status': 'ok', 'transcript': transcript or ''})
 
 
 @interview_bp.route('/api/evaluate', methods=['POST'])
 @login_required
 def api_evaluate():
-    data = request.json
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'status': 'error', 'error': 'missing JSON body'}), 400
+
     question = data.get('question', '')
     answer = data.get('answer', '')
     question_number = data.get('questionNumber', 0)
     typed_answer = data.get('typed_answer', '')
+
+    if not question:
+        return jsonify({'status': 'error', 'error': 'question is required'}), 400
+    if not isinstance(question_number, int) or question_number < 0:
+        return jsonify({'status': 'error', 'error': 'invalid questionNumber'}), 400
 
     # Combine voice transcript and typed input, then evaluate
     combined_answer = combine_answers(answer, typed_answer)
@@ -194,12 +216,12 @@ def api_evaluate():
             }
             interview_runs.insert_one(run_doc)
             session.pop('interview_results', None)
-            result['redirect'] = url_for('interview.results_page')
         except Exception:
             current_app.logger.exception('Failed to persist interview run')
-            result['redirect'] = url_for('interview.results_page')
 
-    return jsonify({'result': result, 'questionNumber': question_number})
+        result['redirect'] = url_for('interview.results_page')
+
+    return jsonify({'status': 'ok', 'result': result, 'questionNumber': question_number})
 
 
 @interview_bp.route('/results')

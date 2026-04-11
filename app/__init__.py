@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify, request
 from flask_login import LoginManager
 from dotenv import load_dotenv
 import os
@@ -30,6 +30,37 @@ def create_app(test_config=None):
     app.register_blueprint(resume_bp)
     app.register_blueprint(interview_bp)
     app.register_blueprint(transcription_bp)              # 👈 NEW
+
+    # -----------------------------
+    # ✅ Global Error Handlers
+    # -----------------------------
+    def _is_api(req):
+        return req.path.startswith('/api/') or req.is_json
+
+    @app.errorhandler(400)
+    def bad_request(e):
+        if _is_api(request):
+            return jsonify({"status": "error", "error": str(e)}), 400
+        return str(e), 400
+
+    @app.errorhandler(404)
+    def not_found(e):
+        if _is_api(request):
+            return jsonify({"status": "error", "error": "not found"}), 404
+        return str(e), 404
+
+    @app.errorhandler(405)
+    def method_not_allowed(e):
+        if _is_api(request):
+            return jsonify({"status": "error", "error": "method not allowed"}), 405
+        return str(e), 405
+
+    @app.errorhandler(500)
+    def internal_error(e):
+        app.logger.exception('Unhandled server error')
+        if _is_api(request):
+            return jsonify({"status": "error", "error": "internal server error"}), 500
+        return str(e), 500
 
     # -----------------------------
     # ✅ Flask-Login User Loader
