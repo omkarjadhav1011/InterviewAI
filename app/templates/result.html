@@ -3,94 +3,92 @@
 
 {% block content %}
 
-<div class="results-wrapper">
+<div class="res-page-wrap">
 
-  <!-- ── Header ──────────────────────────────────────── -->
-  <div class="results-header">
-    <div class="results-header__icon">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-      </svg>
+  <!-- Session meta eyebrow -->
+  <div class="res-eyebrow" id="res-session-eyebrow">Interview Results</div>
+
+  <!-- ── Verdict hero (JS-populated) ──────────────────── -->
+  <div class="verdict-hero-v2" id="verdictBanner" aria-live="polite" style="display:none;">
+    <div>
+      <h1 id="verdict-heading">—</h1>
+      <p class="verdict-summary-v2" id="verdict-summary-text"></p>
     </div>
-    <h1>Interview Performance</h1>
-    <p>Your detailed analysis across all questions</p>
+    <div class="verdict-score-card">
+      <div class="verdict-tag-pill" id="verdict-tag-pill">
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#001613;"></span>
+        Verdict
+      </div>
+      <div class="verdict-num">
+        <span id="verdict-score">—</span>
+        <small>/100</small>
+      </div>
+      <div class="verdict-delta" id="verdict-delta"></div>
+      <div class="verdict-progress-bar">
+        <span id="verdict-prog-bar" style="width:0%;"></span>
+      </div>
+    </div>
   </div>
 
-  <!-- ── Verdict Banner ─────────────────────────────── -->
-  {% if full_evaluation %}
-  <div id="verdictBanner" class="verdict-banner" aria-live="polite"></div>
-  {% endif %}
-
-  <!-- ── Stat Cards ─────────────────────────────────── -->
-  <div class="stats-overview">
-
-    <div class="stat-card">
-      <div class="stat-icon stat-icon--teal">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-        </svg>
-      </div>
-      <div class="stat-value" id="avgConfidence">—</div>
-      <div class="stat-label">Confidence</div>
+  <!-- ── Pillar scores ─────────────────────────────────── -->
+  <div class="pillars-grid">
+    <div class="pillar">
+      <div class="pillar-label">Confidence</div>
+      <div class="pillar-num"><span id="avgConfidence">—</span><small>/10</small></div>
+      <div class="pillar-judgement" id="conf-judgement">Across all answers</div>
+      <div class="pillar-bar"><span id="conf-bar" style="background:var(--accent);width:0%;"></span></div>
     </div>
-
-    <div class="stat-card">
-      <div class="stat-icon stat-icon--violet">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-        </svg>
-      </div>
-      <div class="stat-value" id="avgTechnical">—</div>
-      <div class="stat-label">Technical</div>
+    <div class="pillar">
+      <div class="pillar-label">Technical</div>
+      <div class="pillar-num"><span id="avgTechnical">—</span><small>/10</small></div>
+      <div class="pillar-judgement" id="tech-judgement">Depth &amp; accuracy</div>
+      <div class="pillar-bar"><span id="tech-bar" style="background:var(--violet);width:0%;"></span></div>
     </div>
-
-    <div class="stat-card">
-      <div class="stat-icon stat-icon--amber">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-      </div>
-      <div class="stat-value" id="avgCommunication">—</div>
-      <div class="stat-label">Communication</div>
+    <div class="pillar">
+      <div class="pillar-label">Communication</div>
+      <div class="pillar-num"><span id="avgCommunication">—</span><small>/10</small></div>
+      <div class="pillar-judgement" id="comm-judgement">Clarity &amp; delivery</div>
+      <div class="pillar-bar"><span id="comm-bar" style="background:var(--success);width:0%;"></span></div>
     </div>
-
   </div>
 
-  <!-- ── Skill Summary ──────────────────────────────── -->
+  <!-- ── Skill summary ─────────────────────────────────── -->
   {% if full_evaluation %}
-  <div class="skill-summary-section">
-    <div class="section-label">Skills Assessment</div>
-    <div id="skillGrid" class="skill-grid"></div>
+  <div class="card" id="skillSummaryCard" style="margin-bottom:24px;display:none;">
+    <div class="section-eyebrow">Skills Assessment</div>
+    <div id="skillGrid" class="skill-tags" style="gap:8px;"></div>
   </div>
   {% endif %}
 
-  <!-- ── Detailed Breakdown ─────────────────────────── -->
-  <div class="results-content">
-
-    <div class="chart-section">
-      <h2>Performance Breakdown</h2>
-      <div id="minimalChart" class="minimal-chart"></div>
+  <!-- ── Question breakdown ────────────────────────────── -->
+  <div class="qbreakdown">
+    <div class="qb-head">
+      <h3>Question breakdown</h3>
+      <div class="qb-col-legend">Conf · Tech · Comm</div>
     </div>
-
-    <div class="feedback-section">
-      <h2>Question Analysis</h2>
-      <div id="resultsList" class="feedback-list"></div>
-    </div>
-
+    <div class="qb-body" id="minimalChart"></div>
   </div>
 
-  <!-- ── Actions ────────────────────────────────────── -->
-  <div class="actions">
+  <!-- ── Feedback cards ────────────────────────────────── -->
+  <div class="card" style="margin-bottom:24px;padding:0;overflow:hidden;">
+    <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:18px;font-weight:600;color:var(--text);">Answer analysis</h3>
+    </div>
+    <div id="resultsList" style="padding:8px 0;"></div>
+  </div>
+
+  <!-- ── Actions ───────────────────────────────────────── -->
+  <div class="res-actions">
     <button class="btn btn-primary" onclick="window.location.href='/interview'">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
-      </svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
       Retake Interview
     </button>
-    <button class="btn btn-secondary" onclick="window.location.href='/'">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-      </svg>
+    <button class="btn btn-ghost" onclick="window.print()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Download Scorecard
+    </button>
+    <button class="btn btn-ghost" onclick="window.location.href='/'">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       Dashboard
     </button>
   </div>
@@ -98,209 +96,161 @@
 </div>
 
 <script>
-  // ─── Existing per-answer results ──────────────────────────────────
-  const results = {{ (results or [])|tojson }};
+// ── Helpers ──────────────────────────────────────────────
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+function toDisplay(v) {
+  if (!v) return 0;
+  return v > 10 ? (v / 10) : v;
+}
+function scoreClass(v) {
+  return v >= 8 ? 'good' : v >= 5 ? 'mid' : 'bad';
+}
 
-  if (results.length > 0) {
-    const toDisplayScore = (v) => {
-      if (!v) return 0;
-      return v > 10 ? (v / 10) : v;
-    };
+// ── Per-answer results ────────────────────────────────────
+const results    = {{ (results or [])|tojson }};
+const fullEval   = {{ (full_evaluation or {})|tojson }};
+const strictMap  = {};
+if (fullEval && fullEval.answer_evaluation) {
+  fullEval.answer_evaluation.forEach((ae, idx) => { strictMap[idx] = ae; });
+}
 
-    const avg = (key) =>
-      (results.reduce((s, r) => s + toDisplayScore(r.result && r.result[key]), 0) / results.length).toFixed(1);
+if (results.length > 0) {
+  const avg = (key) =>
+    (results.reduce((s, r) => s + toDisplay(r.result && r.result[key]), 0) / results.length).toFixed(1);
 
-    document.getElementById('avgConfidence').textContent    = avg('confidence');
-    document.getElementById('avgTechnical').textContent     = avg('technical');
-    document.getElementById('avgCommunication').textContent = avg('communication');
+  const cAvg = parseFloat(avg('confidence'));
+  const tAvg = parseFloat(avg('technical'));
+  const mAvg = parseFloat(avg('communication'));
 
-    const chartDiv    = document.getElementById('minimalChart');
-    const feedbackDiv = document.getElementById('resultsList');
+  // Pillars
+  document.getElementById('avgConfidence').textContent    = cAvg.toFixed(1);
+  document.getElementById('avgTechnical').textContent     = tAvg.toFixed(1);
+  document.getElementById('avgCommunication').textContent = mAvg.toFixed(1);
 
-    const fullEval  = {{ (full_evaluation or {})|tojson }};
-    const strictMap = {};
-    if (fullEval && fullEval.answer_evaluation) {
-      fullEval.answer_evaluation.forEach((ae, idx) => { strictMap[idx] = ae; });
-    }
+  requestAnimationFrame(() => setTimeout(() => {
+    document.getElementById('conf-bar').style.width = (cAvg * 10) + '%';
+    document.getElementById('tech-bar').style.width = (tAvg * 10) + '%';
+    document.getElementById('comm-bar').style.width = (mAvg * 10) + '%';
+  }, 150));
 
-    results.forEach((r, i) => {
-      const conf    = toDisplayScore(r.result && r.result.confidence)    || 0;
-      const tech    = toDisplayScore(r.result && r.result.technical)     || 0;
-      const comm    = toDisplayScore(r.result && r.result.communication) || 0;
-      const overall = (r.overall_score !== undefined && r.overall_score !== null)
-        ? r.overall_score
-        : Number(((conf + tech + comm) / 3).toFixed(1));
+  // Question breakdown rows
+  const chartDiv = document.getElementById('minimalChart');
+  results.forEach((r, i) => {
+    const conf  = toDisplay(r.result && r.result.confidence)    || 0;
+    const tech  = toDisplay(r.result && r.result.technical)     || 0;
+    const comm  = toDisplay(r.result && r.result.communication) || 0;
+    const score = (r.overall_score !== undefined && r.overall_score !== null)
+      ? Number(r.overall_score).toFixed(1)
+      : ((conf + tech + comm) / 3).toFixed(1);
 
-      const strict = strictMap[i] || null;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:grid;grid-template-columns:36px 1fr 56px 56px 56px 80px;gap:16px;align-items:center;padding:14px 22px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13px;transition:background 0.15s;';
+    row.addEventListener('mouseover', () => row.style.background = 'rgba(255,255,255,0.02)');
+    row.addEventListener('mouseout',  () => row.style.background = '');
+    row.innerHTML = `
+      <div style="font-family:var(--font-mono);color:var(--text-secondary);font-size:11px;">${String(i+1).padStart(2,'0')}</div>
+      <div style="font-weight:500;line-height:1.4;color:var(--text);">${escHtml(r.question || 'Question ' + (i+1))}</div>
+      <div class="qb-cell ${scoreClass(conf)}" style="text-align:center;">${conf}</div>
+      <div class="qb-cell ${scoreClass(tech)}" style="text-align:center;">${tech}</div>
+      <div class="qb-cell ${scoreClass(comm)}" style="text-align:center;">${comm}</div>
+      <div style="font-family:var(--font-display);font-size:17px;font-weight:600;color:var(--text);text-align:right;">${score}<small style="font-size:11px;color:var(--text-secondary);font-weight:500;">/10</small></div>
+    `;
+    chartDiv.appendChild(row);
+  });
 
-      // Performance bar block
-      const block = document.createElement('div');
-      block.className = 'question-block';
-      block.style.animationDelay = (i * 0.06) + 's';
-      block.innerHTML = `
-        <div class="question-label">Q${i + 1}</div>
-        <div class="metrics-bars">
-          <div class="metric-row">
-            <span class="metric-name">Confidence</span>
-            <div class="bar-container">
-              <div class="bar bar-confidence" style="width:0%" data-width="${conf * 10}"></div>
-            </div>
-            <span class="metric-score">${conf}</span>
-          </div>
-          <div class="metric-row">
-            <span class="metric-name">Technical</span>
-            <div class="bar-container">
-              <div class="bar bar-technical" style="width:0%" data-width="${tech * 10}"></div>
-            </div>
-            <span class="metric-score">${tech}</span>
-          </div>
-          <div class="metric-row">
-            <span class="metric-name">Communication</span>
-            <div class="bar-container">
-              <div class="bar bar-communication" style="width:0%" data-width="${comm * 10}"></div>
-            </div>
-            <span class="metric-score">${comm}</span>
-          </div>
-        </div>
-        <div class="question-transcript">
-          ${r.transcript || r.answer ? `"${(r.transcript || r.answer).slice(0,120)}${(r.transcript || r.answer).length > 120 ? '…' : ''}"` : ''}
-        </div>
-        <div class="question-score-row">
-          <span class="overall-score">${overall}/10</span>
-          ${strict ? `<span class="strict-score" title="AI strict score">${strict.score}/100</span>` : ''}
-        </div>
-      `;
-      chartDiv.appendChild(block);
+  // Answer analysis cards
+  const feedbackDiv = document.getElementById('resultsList');
+  results.forEach((r, i) => {
+    const conf  = toDisplay(r.result && r.result.confidence)    || 0;
+    const tech  = toDisplay(r.result && r.result.technical)     || 0;
+    const comm  = toDisplay(r.result && r.result.communication) || 0;
+    const score = (r.overall_score !== undefined && r.overall_score !== null)
+      ? Number(r.overall_score).toFixed(1)
+      : ((conf + tech + comm) / 3).toFixed(1);
+    const strict = strictMap[i] || null;
 
-      // Feedback card
-      const card = document.createElement('div');
-      card.className = 'feedback-card';
-      card.style.animationDelay = (i * 0.07 + 0.1) + 's';
+    const card = document.createElement('div');
+    card.style.cssText = 'padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.04);animation:fadeUp 0.4s ease both;';
+    card.style.animationDelay = (i * 0.05) + 's';
 
-      const header = document.createElement('div');
-      header.className = 'feedback-header';
+    const hasVoice = r.transcript && r.transcript.trim().length > 0;
+    const hasTyped = r.typed      && r.typed.trim().length      > 0;
+    const modeText  = (hasVoice && hasTyped) ? 'Speech + Typed' : hasVoice ? 'Speech' : hasTyped ? 'Typed' : 'No Input';
+    const modeColor = (hasVoice && hasTyped) ? '#8b7ff5' : hasVoice ? '#00d4b8' : hasTyped ? '#f0a500' : '#7a8499';
 
-      const qnum = document.createElement('span');
-      qnum.className = 'question-number';
-      qnum.textContent = `Question ${i + 1}`;
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;">
+        <span style="font-family:var(--font-mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-secondary);">Q${i+1}</span>
+        <span style="font-size:0.7rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,0.05);border:1px solid ${modeColor}33;color:${modeColor};">${escHtml(modeText)}</span>
+        <span style="margin-left:auto;font-family:var(--font-display);font-size:17px;font-weight:600;color:var(--text);">${score}<small style="font-size:11px;color:var(--text-secondary);font-weight:500;">/10</small></span>
+      </div>
+      <p style="font-size:14px;color:var(--text-secondary);line-height:1.6;margin-bottom:${strict ? '10px' : '0'};">
+        ${escHtml((r.result && (r.result.feedback || r.result.summary)) || 'Good effort! Keep practising for smoother delivery.')}
+      </p>
+      ${strict && strict.issues && strict.issues.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">' + strict.issues.map(issue => `<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:4px;font-size:11px;background:var(--amber-dim);color:var(--amber);border:1px solid rgba(240,160,48,0.2);">${escHtml(issue)}</span>`).join('') + '</div>' : ''}
+      ${strict && strict.justification ? `<p style="font-size:12px;color:var(--text-secondary);margin-top:8px;padding:10px 12px;background:rgba(255,255,255,0.02);border-left:2px solid var(--violet);border-radius:0 6px 6px 0;line-height:1.5;">${escHtml(strict.justification)}</p>` : ''}
+    `;
+    feedbackDiv.appendChild(card);
+  });
+}
 
-      const scoreEl = document.createElement('span');
-      scoreEl.className = 'overall-score';
-      scoreEl.textContent = `${overall}/10`;
+// ── Full evaluation: verdict hero ────────────────────────
+if (fullEval && fullEval.overall_evaluation) {
+  const oe      = fullEval.overall_evaluation;
+  const verdict = (oe.verdict || '').trim();
+  const score   = oe.final_score || 0;
+  const summary = oe.summary || '';
 
-      const hasVoice = r.transcript && r.transcript.trim().length > 0;
-      const hasTyped  = r.typed      && r.typed.trim().length      > 0;
-      const modeText  = (hasVoice && hasTyped) ? 'Speech + Typed'
-                      : hasVoice               ? 'Speech'
-                      : hasTyped               ? 'Typed'
-                      :                          'No Input';
-      const modeColor = (hasVoice && hasTyped) ? '#8b7ff5'
-                      : hasVoice               ? '#00d4b8'
-                      : hasTyped               ? '#f0a500'
-                      :                          '#7a8499';
-      const modeBadge = document.createElement('span');
-      modeBadge.className = 'mode-badge';
-      modeBadge.style.setProperty('--mode-color', modeColor);
-      modeBadge.textContent = modeText;
+  const banner = document.getElementById('verdictBanner');
+  if (banner) {
+    banner.style.display = '';
+    const variantMap = { 'Strong Hire': 'strong', 'Hire': 'hire', 'Weak Hire': 'weak', 'Reject': 'reject' };
+    const variant = variantMap[verdict] || 'hire';
+    const colorMap = { strong: 'var(--accent)', hire: 'var(--success)', weak: 'var(--amber)', reject: 'var(--error)' };
+    const vc = colorMap[variant];
 
-      header.appendChild(qnum);
-      header.appendChild(modeBadge);
-      header.appendChild(scoreEl);
+    // Split "Strong Hire" into "Strong\nHire."
+    const parts = verdict.split(' ');
+    const h1html = parts.length > 1
+      ? parts.slice(0,-1).join(' ') + '<br><em>' + parts[parts.length-1] + '.</em>'
+      : '<em>' + verdict + '.</em>';
 
-      const txt = document.createElement('p');
-      txt.className = 'feedback-text';
-      txt.textContent = (r.result && (r.result.feedback || r.result.summary))
-        || 'Good effort! Keep practising for smoother delivery.';
+    document.getElementById('verdict-heading').innerHTML = h1html;
+    document.getElementById('verdict-heading').style.color = 'var(--text)';
+    document.getElementById('verdict-summary-text').textContent = summary;
+    document.getElementById('verdict-tag-pill').style.background = vc;
+    document.getElementById('verdict-tag-pill').style.color = '#001613';
+    document.getElementById('verdict-score').textContent = Number(score);
 
-      card.appendChild(header);
-      card.appendChild(txt);
+    requestAnimationFrame(() => setTimeout(() => {
+      document.getElementById('verdict-prog-bar').style.width = Math.min(100, Number(score)) + '%';
+    }, 200));
+  }
 
-      if (strict) {
-        if (strict.issues && strict.issues.length) {
-          const issuesRow = document.createElement('div');
-          issuesRow.className = 'issue-tags';
-          strict.issues.forEach((issue) => {
-            const tag = document.createElement('span');
-            tag.className = 'issue-tag';
-            tag.textContent = issue;
-            issuesRow.appendChild(tag);
-          });
-          card.appendChild(issuesRow);
-        }
-
-        if (strict.justification) {
-          const just = document.createElement('p');
-          just.className = 'justification-text';
-          just.textContent = strict.justification;
-          card.appendChild(just);
-        }
-      }
-
-      feedbackDiv.appendChild(card);
+  // Skill summary chips
+  const grid = document.getElementById('skillGrid');
+  const skillCard = document.getElementById('skillSummaryCard');
+  if (grid && fullEval.skill_summary && fullEval.skill_summary.length) {
+    if (skillCard) skillCard.style.display = '';
+    fullEval.skill_summary.forEach((s) => {
+      const strength = (s.strength || 'Medium').toLowerCase().replace(/\s+/g, '-');
+      const colorMap2 = { strong: 'var(--accent)', medium: 'var(--text-secondary)', weak: 'var(--amber)' };
+      const bgMap    = { strong: 'var(--accent-dim)', medium: 'rgba(255,255,255,0.04)', weak: 'var(--amber-dim)' };
+      const c = colorMap2[strength] || 'var(--text-secondary)';
+      const bg = bgMap[strength] || 'rgba(255,255,255,0.04)';
+      const chip = document.createElement('div');
+      chip.className = 'skill-tag';
+      chip.style.cssText = `background:${bg};color:${c};border-color:${c}33;`;
+      chip.title = s.insight || '';
+      chip.innerHTML = `${escHtml(s.skill)} <small style="opacity:0.7;">${escHtml(s.strength)}</small>`;
+      grid.appendChild(chip);
     });
-
-    // Animate bars in after paint
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        document.querySelectorAll('.bar[data-width]').forEach((bar) => {
-          bar.style.width = bar.dataset.width + '%';
-        });
-      }, 120);
-    });
   }
-
-  // Helper to escape HTML entities
-  function escHtml(str) {
-    const d = document.createElement('div');
-    d.textContent = str || '';
-    return d.innerHTML;
-  }
-
-  // ─── Full evaluation — verdict + skill summary ──────────────
-  const fullEval = {{ (full_evaluation or {})|tojson }};
-
-  if (fullEval && fullEval.overall_evaluation) {
-    const oe      = fullEval.overall_evaluation;
-    const verdict = (oe.verdict || '').trim();
-    const score   = oe.final_score || 0;
-    const summary = oe.summary || '';
-
-    const banner = document.getElementById('verdictBanner');
-    if (banner) {
-      const variantMap = {
-        'Strong Hire': 'strong-hire',
-        'Hire':        'hire',
-        'Weak Hire':   'weak-hire',
-        'Reject':      'reject'
-      };
-      const variant = variantMap[verdict] || 'hire';
-      banner.classList.add(`verdict-banner--${variant}`);
-      banner.innerHTML = `
-        <div class="verdict-banner__left">
-          <span class="verdict-pill verdict-pill--${variant}">${escHtml(verdict)}</span>
-          <span class="verdict-score">${Number(score)}<small>/100</small></span>
-        </div>
-        <p class="verdict-summary">${escHtml(summary)}</p>
-      `;
-    }
-
-    const grid = document.getElementById('skillGrid');
-    if (grid && fullEval.skill_summary) {
-      fullEval.skill_summary.forEach((s) => {
-        const strength = (s.strength || 'Medium').toLowerCase().replace(/\s+/g, '-');
-        const iconMap  = { 'strong': '&#10003;', 'medium': '~', 'weak': '&#10007;' };
-        const icon     = iconMap[strength] || '~';
-        const chip = document.createElement('div');
-        chip.className = `skill-chip skill-chip--${strength}`;
-        chip.title = s.insight || '';
-        chip.innerHTML = `
-          <span class="skill-chip__name">${escHtml(s.skill)}</span>
-          <span class="skill-chip__strength">${icon} ${escHtml(s.strength)}</span>
-        `;
-        grid.appendChild(chip);
-      });
-    }
-  }
+}
 </script>
 
 {% endblock %}

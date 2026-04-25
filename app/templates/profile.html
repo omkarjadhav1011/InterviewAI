@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+{% block title %}Profile — MockMinds{% endblock %}
+
+{% block content %}
+<div class="pg-shell">
+  <div class="pg-eyebrow">Personal</div>
+  <h1 class="pg-h1">Profile</h1>
+  <p class="pg-lead">Your interview history, skills, and the record that shows up when you share a scorecard.</p>
+
+  <!-- Hero card -->
+  <div class="profile-hero">
+    <div class="profile-avatar">{{ current_user.username[0] | upper }}</div>
+    <div>
+      <div class="profile-name">
+        {{ current_user.username }}
+        {% if stats.sessions >= 5 %}
+        <span class="profile-badge">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="8" r="6"/><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"/></svg>
+          Active
+        </span>
+        {% endif %}
+      </div>
+      <div class="profile-meta">
+        <div class="profile-meta-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          {{ current_user.email }}
+        </div>
+        <div class="profile-meta-item">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Member since {{ member_since }}
+        </div>
+      </div>
+      <p class="profile-bio">
+        Preparing for technical interviews with MockMinds. {% if skills %}Tracking {{ skills|length }} skills.{% endif %}
+      </p>
+      <div class="profile-chips">
+        {% if skills %}
+          {% for s in skills[:5] %}
+          <span class="pchip{% if loop.index <= 2 %} primary{% endif %}">{{ s if s is string else s.get('name', s) }}</span>
+          {% endfor %}
+          {% if skills|length > 5 %}<span class="pchip">+{{ skills|length - 5 }} more</span>{% endif %}
+        {% else %}
+          <span class="pchip">Upload a resume to see skills</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="profile-actions">
+      <a href="/settings" class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        Edit profile
+      </a>
+      <button class="btn btn-ghost" onclick="navigator.clipboard.writeText(window.location.href)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Share profile
+      </button>
+    </div>
+  </div>
+
+  <!-- Stats strip -->
+  <div class="pf-stats">
+    <div class="pf-stat">
+      <div class="pf-stat-key">Sessions</div>
+      <div class="pf-stat-val">{{ stats.sessions }}</div>
+      <div class="pf-stat-trend">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
+        All time
+      </div>
+    </div>
+    <div class="pf-stat">
+      <div class="pf-stat-key">Avg Score</div>
+      <div class="pf-stat-val">{{ stats.avg_score }}<small>/10</small></div>
+      <div class="pf-stat-trend">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Overall average
+      </div>
+    </div>
+    <div class="pf-stat">
+      <div class="pf-stat-key">Best Score</div>
+      <div class="pf-stat-val">{{ stats.best_score }}<small>/10</small></div>
+      <div class="pf-stat-trend">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        Personal best
+      </div>
+    </div>
+    <div class="pf-stat">
+      <div class="pf-stat-key">Skills</div>
+      <div class="pf-stat-val">{{ skills|length if skills else 0 }}</div>
+      <div class="pf-stat-trend">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        From resume
+      </div>
+    </div>
+  </div>
+
+  <!-- Two-column body -->
+  <div class="pf-body">
+    <!-- Left column -->
+    <div>
+      <!-- Skill map -->
+      {% if skills %}
+      <div class="pf-card">
+        <div class="pf-card-head">
+          <h3>Skill map</h3>
+          <a href="/upload">Update →</a>
+        </div>
+        {% for s in skills[:8] %}
+        {% set name = s if s is string else s.get('name', s) %}
+        {% set score = s.get('score', 70) | int if s is mapping else 70 %}
+        <div class="pf-skill-row">
+          <div class="pf-skill-top">
+            <div class="pf-skill-name">{{ name }}</div>
+            <div class="pf-skill-meta">{{ score }}</div>
+          </div>
+          <div class="pf-skill-bar{% if score < 60 %} weak{% endif %}">
+            <span style="width:{{ [score, 100]|min }}%;"></span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Recent activity -->
+      <div class="pf-card">
+        <div class="pf-card-head">
+          <h3>Recent activity</h3>
+          <a href="/upload">New session →</a>
+        </div>
+        {% if recent_results %}
+          {% for r in recent_results[:5] %}
+          <div class="activity-row">
+            <div class="activity-dot">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="activity-text">
+              <strong>Interview session</strong>
+              {% if r.overall_score %} · scored {{ "%.1f"|format(r.overall_score) }}/10{% endif %}
+              {% if r.verdict %} · {{ r.verdict }}{% endif %}
+            </div>
+            <div class="activity-time">
+              {{ r.created_at.strftime('%b %d') if r.created_at else '' }}
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div style="padding:16px 0;color:var(--text-secondary);font-size:13px;text-align:center;">
+            No sessions yet. <a href="/upload" style="color:var(--accent);text-decoration:none;">Start your first interview →</a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Right column -->
+    <div>
+      <!-- Achievements -->
+      <div class="pf-card">
+        <div class="pf-card-head">
+          <h3>Achievements</h3>
+          <a>{{ stats.sessions }} sessions</a>
+        </div>
+        <div class="ach-grid">
+          <div class="ach-tile{% if stats.sessions < 1 %} locked{% endif %}">
+            <div class="ach-icon">🎯</div>
+            <div class="ach-name">First shot</div>
+            <div class="ach-desc">Complete 1 session</div>
+          </div>
+          <div class="ach-tile{% if stats.sessions < 5 %} locked{% endif %}">
+            <div class="ach-icon">🔥</div>
+            <div class="ach-name">On a roll</div>
+            <div class="ach-desc">5 sessions done</div>
+          </div>
+          <div class="ach-tile{% if stats.best_score_raw < 8.0 %} locked{% endif %}">
+            <div class="ach-icon">⭐</div>
+            <div class="ach-name">Strong Hire</div>
+            <div class="ach-desc">Score 8.0 or above</div>
+          </div>
+          <div class="ach-tile{% if stats.sessions < 10 %} locked{% endif %}">
+            <div class="ach-icon">🏆</div>
+            <div class="ach-name">Ten sessions</div>
+            <div class="ach-desc">Complete 10 mocks</div>
+          </div>
+          <div class="ach-tile{% if stats.best_score_raw < 9.0 %} locked{% endif %}">
+            <div class="ach-icon">💎</div>
+            <div class="ach-name">Elite</div>
+            <div class="ach-desc">Score 9.0 or above</div>
+          </div>
+          <div class="ach-tile{% if skills|length < 10 %} locked{% endif %}">
+            <div class="ach-icon">🧠</div>
+            <div class="ach-name">Deep skills</div>
+            <div class="ach-desc">10+ skills detected</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Public profile link -->
+      <div class="pf-card">
+        <div class="pf-card-head"><h3>Public profile</h3></div>
+        <p style="font-size:13px;color:var(--text-secondary);line-height:1.55;margin-bottom:14px;">
+          Anyone with the link sees your verdicts, pillar scores, and skill map. Transcripts stay private.
+        </p>
+        <div class="public-link-box">
+          <span>mockminds.io/u/<span class="accent">{{ current_user.username.lower().replace(' ', '-') }}</span></span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

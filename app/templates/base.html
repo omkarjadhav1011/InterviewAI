@@ -64,6 +64,8 @@
             <nav class="app-nav">
                 <a href="/" class="app-nav__link">Dashboard</a>
                 <a href="/upload" class="app-nav__link">Practice</a>
+                <a href="/interview" class="app-nav__link">History</a>
+                <a href="/settings" class="app-nav__link">Settings</a>
             </nav>
 
             <!-- Profile -->
@@ -77,7 +79,10 @@
                             <div class="dropdown-user__name">{{ current_user.username }}</div>
                             <div class="dropdown-user__email">{{ current_user.email }}</div>
                         </div>
-                        <a href="#" class="dropdown-item">
+                        <a href="/profile" class="dropdown-item">
+                            <i class="fas fa-user"></i>Profile
+                        </a>
+                        <a href="/settings" class="dropdown-item">
                             <i class="fas fa-cog"></i>Settings
                         </a>
                         <a href="{{ url_for('auth.logout') }}" class="dropdown-item dropdown-item--danger">

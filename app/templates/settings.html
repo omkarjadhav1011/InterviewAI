@@ -1,0 +1,302 @@
+{% extends 'base.html' %}
+{% block title %}Settings — MockMinds{% endblock %}
+
+{% block content %}
+<div class="pg-shell">
+  <div class="pg-eyebrow">Workspace · Account</div>
+  <h1 class="pg-h1">Settings</h1>
+  <p class="pg-lead">Tune the way MockMinds practices with you. Most changes apply to your next session.</p>
+
+  <div class="set-shell">
+
+    <!-- ── Left nav ── -->
+    <nav class="set-nav">
+      <div class="set-nav-section">Account</div>
+      <a href="#general" class="set-nav-item active">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        General
+      </a>
+      <a href="#notifications" class="set-nav-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        Notifications
+      </a>
+      <a href="#integrations" class="set-nav-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Integrations
+      </a>
+      <div class="set-nav-section">Practice</div>
+      <a href="#interview-style" class="set-nav-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Interview style
+      </a>
+      <a href="#audio-video" class="set-nav-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        Audio &amp; video
+      </a>
+      <div class="set-nav-section">Workspace</div>
+      <a href="#billing" class="set-nav-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        Plan &amp; billing
+      </a>
+      <a href="#danger" class="set-nav-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Danger zone
+      </a>
+    </nav>
+
+    <!-- ── Right column ── -->
+    <div>
+
+      <!-- General -->
+      <div class="set-card" id="general">
+        <div class="set-card-head">
+          <h3>General</h3>
+          <p>Identity, contact email, and the basics. Used on shared scorecards.</p>
+        </div>
+        <form method="post" action="/settings/general">
+          <div class="set-form-grid">
+            <div class="set-field">
+              <label>Full name</label>
+              <input class="set-input" type="text" name="username" value="{{ current_user.username }}" placeholder="Your name">
+            </div>
+            <div class="set-field">
+              <label>Public handle</label>
+              <input class="set-input" type="text" name="handle" value="{{ current_user.username.lower().replace(' ', '-') }}" placeholder="your-handle">
+            </div>
+            <div class="set-field">
+              <label>Email</label>
+              <input class="set-input" type="email" name="email" value="{{ current_user.email }}" placeholder="you@example.com">
+            </div>
+            <div class="set-field">
+              <label>Time zone</label>
+              <select class="set-select" name="timezone">
+                <option>Asia / Kolkata · IST</option>
+                <option>America / Los Angeles · PST</option>
+                <option>America / New York · EST</option>
+                <option>Europe / London · GMT</option>
+                <option>UTC</option>
+              </select>
+            </div>
+            <div class="set-field full">
+              <label>Bio</label>
+              <textarea class="set-input textarea" name="bio" placeholder="Tell us about yourself and your interview goals…"></textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:24px;padding-top:18px;border-top:1px solid var(--border);">
+            <button type="submit" class="btn btn-primary">Save changes</button>
+            <button type="button" class="btn btn-ghost" onclick="this.closest('form').reset()">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Interview style -->
+      <div class="set-card" id="interview-style">
+        <div class="set-card-head">
+          <h3>Interview style</h3>
+          <p>How firmly the interviewer pushes, how long sessions run, and what gets scored.</p>
+        </div>
+
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">Difficulty</div>
+            <div class="set-row-help">Calibrated automatically from your résumé. Override here if you want a stretch.</div>
+          </div>
+          <div class="seg">
+            <span>Easy</span>
+            <span class="on">Senior</span>
+            <span>Staff</span>
+            <span>Principal</span>
+          </div>
+        </div>
+
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">Default session length</div>
+            <div class="set-row-help">Number of questions per mock. You can always end early.</div>
+          </div>
+          <div class="seg">
+            <span>4 Q</span>
+            <span class="on">6 Q</span>
+            <span>10 Q</span>
+            <span>15 Q</span>
+          </div>
+        </div>
+
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">Interviewer voice</div>
+            <div class="set-row-help">All voices are AI-generated.</div>
+          </div>
+          <select class="set-select">
+            <option>Lena · Calm, neutral</option>
+            <option>Dax · Direct, fast</option>
+            <option>Rhea · Warm, slower</option>
+            <option>Kai · Friendly</option>
+          </select>
+        </div>
+
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">Push back on weak answers</div>
+            <div class="set-row-help">Interviewer will follow up with sharper probes when confidence dips.</div>
+          </div>
+          <div class="sw on"></div>
+        </div>
+
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">Allow hint requests</div>
+            <div class="set-row-help">Lets you ask for a single nudge per question. Affects scoring slightly.</div>
+          </div>
+          <div class="sw on"></div>
+        </div>
+
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">Use camera for body-language signal</div>
+            <div class="set-row-help">Adds eye-contact &amp; posture to your delivery score. Video never leaves your device.</div>
+          </div>
+          <div class="sw"></div>
+        </div>
+      </div>
+
+      <!-- Notifications -->
+      <div class="set-card" id="notifications">
+        <div class="set-card-head">
+          <h3>Notifications</h3>
+          <p>What MockMinds nudges you about, and where.</p>
+        </div>
+        {% set notifs = [
+          ('Daily drill reminder', '9:00 AM in your time zone, weekdays.', true),
+          ('Streak warning', 'When your streak is about to break.', true),
+          ('Score deltas', 'When a pillar moves up or down by 5+ points.', true),
+          ('Weekly digest', 'Sunday 6 PM. Top weakness, best moment, plan for next week.', false),
+          ('Product updates', 'New question packs, voice models, scoring tweaks.', false),
+        ] %}
+        {% for name, help, on in notifs %}
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">{{ name }}</div>
+            <div class="set-row-help">{{ help }}</div>
+          </div>
+          <div class="sw {{ 'on' if on else '' }}"></div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Integrations -->
+      <div class="set-card" id="integrations">
+        <div class="set-card-head">
+          <h3>Integrations</h3>
+          <p>Pull job descriptions and résumé sources from connected accounts.</p>
+        </div>
+        <div class="conn-row">
+          <div class="conn-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          </div>
+          <div>
+            <div class="conn-name">LinkedIn</div>
+            <div class="conn-meta">Import profile &amp; job descriptions</div>
+          </div>
+          <button class="btn btn-primary" style="padding:7px 14px;font-size:12px;">Connect</button>
+        </div>
+        <div class="conn-row">
+          <div class="conn-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg>
+          </div>
+          <div>
+            <div class="conn-name">GitHub</div>
+            <div class="conn-meta">Pull language signals from repositories</div>
+          </div>
+          <button class="btn btn-primary" style="padding:7px 14px;font-size:12px;">Connect</button>
+        </div>
+        <div class="conn-row">
+          <div class="conn-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          </div>
+          <div>
+            <div class="conn-name">Slack</div>
+            <div class="conn-meta">Send weekly digest to a channel</div>
+          </div>
+          <button class="btn btn-ghost" style="padding:7px 14px;font-size:12px;">Connect</button>
+        </div>
+      </div>
+
+      <!-- Plan & billing -->
+      <div class="set-card" id="billing">
+        <div class="set-card-head">
+          <h3>Plan &amp; billing</h3>
+          <p>Manage your subscription and payment details.</p>
+        </div>
+        <div class="plan-card">
+          <div>
+            <h4>
+              Free
+              <span class="profile-badge">Current</span>
+            </h4>
+            <p>5 mocks per month · standard voices · basic scoring</p>
+          </div>
+          <div class="plan-price">$0 <small>/ month</small></div>
+        </div>
+        <div style="margin-top:16px;">
+          <button class="btn btn-primary">Upgrade to Pro →</button>
+        </div>
+      </div>
+
+      <!-- Danger zone -->
+      <div class="set-card danger-zone" id="danger">
+        <div class="set-card-head">
+          <h3>Danger zone</h3>
+          <p>Permanent actions. We'll ask for confirmation, but they can't be undone.</p>
+        </div>
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">Export all data</div>
+            <div class="set-row-help">Get every transcript, scorecard, and audio file as a zip.</div>
+          </div>
+          <button class="btn btn-ghost">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export
+          </button>
+        </div>
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">Delete all session history</div>
+            <div class="set-row-help">Removes every mock, transcript, and audio file. Profile remains.</div>
+          </div>
+          <button class="btn-danger">Delete history</button>
+        </div>
+        <div class="set-row">
+          <div>
+            <div class="set-row-label">Delete account</div>
+            <div class="set-row-help">Removes everything. You'll receive a final data export by email.</div>
+          </div>
+          <button class="btn-danger">Delete account</button>
+        </div>
+      </div>
+
+    </div><!-- /.right column -->
+  </div><!-- /.set-shell -->
+</div><!-- /.pg-shell -->
+
+<script>
+// Smooth scroll to anchor + highlight nav item
+(function () {
+  document.querySelectorAll('.set-nav-item').forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      document.querySelectorAll('.set-nav-item').forEach(l => l.classList.remove('active'));
+      link.classList.add('active');
+      const id = link.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  // Toggle switches (demo only)
+  document.querySelectorAll('.sw').forEach(sw => {
+    sw.addEventListener('click', () => sw.classList.toggle('on'));
+  });
+})();
+</script>
+{% endblock %}

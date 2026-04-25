@@ -1,4 +1,5 @@
 import re
+from datetime import timezone
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user, UserMixin
 import bcrypt
@@ -82,3 +83,48 @@ def logout():
     logout_user()
     flash('Logged out')
     return redirect(url_for('auth.login'))
+
+
+@auth_bp.route('/profile')
+@login_required
+def profile():
+    db = get_db()
+    user_doc = db.users.find_one({'email': current_user.email}) or {}
+    runs = list(db.interview_runs.find({'user_email': current_user.email}).sort('created_at', -1))
+    scores = [r['overall_score'] for r in runs if r.get('overall_score') is not None]
+    avg_score = round(sum(scores) / len(scores), 1) if scores else 0
+    best_score = max(scores) if scores else 0
+
+    created = user_doc.get('created_at')
+    if created:
+        member_since = created.strftime('%B %Y')
+    else:
+        member_since = 'Recently'
+
+    stats = {
+        'sessions': len(runs),
+        'avg_score': avg_score,
+        'best_score': round(best_score, 1),
+        'best_score_raw': best_score,
+    }
+    return render_template(
+        'profile.html',
+        stats=stats,
+        skills=user_doc.get('skills', []),
+        recent_results=runs[:5],
+        member_since=member_since,
+    )
+
+
+@auth_bp.route('/settings', methods=['GET'])
+@login_required
+def settings():
+    return render_template('settings.html')
+
+
+@auth_bp.route('/settings/general', methods=['POST'])
+@login_required
+def settings_general():
+    # Placeholder — extend with actual field updates as needed
+    flash('Settings saved.')
+    return redirect(url_for('auth.settings'))

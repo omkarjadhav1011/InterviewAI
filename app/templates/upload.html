@@ -2,70 +2,103 @@
 {% block title %}Upload Resume — MockMinds{% endblock %}
 
 {% block content %}
-<div class="upload-container">
-  <div class="upload-card">
+<div class="upload-shell">
 
-    <!-- Page heading -->
-    <div class="upload-heading">
-      <h2>Upload Your Resume</h2>
-      <p>Drop your PDF and let the AI extract your skills, then generate a personalised interview.</p>
+  <!-- Step progress -->
+  <div class="upload-step-row">
+    <div class="upload-step active">
+      <span class="step-num">1</span> Upload
     </div>
-
-    <!-- Upload Form — IDs preserved for resume.js -->
-    <form id="resumeForm" enctype="multipart/form-data">
-
-      <!-- Hidden native file input — resume.js reads from this -->
-      <input
-        type="file"
-        id="resumeFile"
-        name="resume"
-        accept="application/pdf"
-        required
-        class="file-input"
-        aria-hidden="true"
-        tabindex="-1"
-      >
-
-      <!-- Beautiful drag-and-drop zone -->
-      <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Upload resume PDF">
-        <div class="drop-zone__icon">
-          <i class="fas fa-file-pdf"></i>
-        </div>
-        <div class="drop-zone__text">
-          <p class="drop-zone__primary">Drop your PDF here</p>
-          <p class="drop-zone__secondary">or click to browse files</p>
-          <span class="drop-zone__filename" id="fileLabel">
-            <i class="fas fa-check-circle"></i>
-            <span id="fileLabelText"></span>
-          </span>
-        </div>
-      </div>
-
-      <button type="submit" class="upload-btn">
-        Analyse Resume &rarr;
-      </button>
-    </form>
-
-    <!-- Progress — shown/hidden by resume.js -->
-    <div id="progress" class="progress-section">
-      <div class="progress-track">
-        <div id="progressBar"></div>
-      </div>
-      <p id="progressText"></p>
+    <span class="step-sep">—</span>
+    <div class="upload-step">
+      <span class="step-num">2</span> Confirm Skills
     </div>
-
-    <!-- Skills extracted — populated by resume.js -->
-    <div id="keywords" class="skills-section"></div>
-
+    <span class="step-sep">—</span>
+    <div class="upload-step">
+      <span class="step-num">3</span> Interview
+    </div>
+    <span class="step-sep">—</span>
+    <div class="upload-step">
+      <span class="step-num">4</span> Review
+    </div>
   </div>
+
+  <!-- Heading -->
+  <div class="section-eyebrow">Step 01 of 04</div>
+  <div class="upload-heading-v2">
+    <h1>Drop a resume.</h1>
+    <p>We extract skills, infer seniority, and generate a tailored question set. Your file is encrypted and auto-purged after 24 hours.</p>
+  </div>
+
+  <!-- Upload Form — IDs preserved for resume.js -->
+  <form id="resumeForm" enctype="multipart/form-data">
+
+    <input
+      type="file"
+      id="resumeFile"
+      name="resume"
+      accept="application/pdf"
+      required
+      class="file-input"
+      aria-hidden="true"
+      tabindex="-1"
+    >
+
+    <!-- Drop zone -->
+    <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Upload resume PDF">
+      <div class="drop-zone__icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      </div>
+      <div class="drop-zone__text">
+        <p class="drop-zone__primary">Drop your PDF here</p>
+        <p class="drop-zone__secondary">or <span style="color:var(--accent);cursor:pointer;">browse from your device</span> · max 10 MB</p>
+        <span class="drop-zone__filename" id="fileLabel">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          <span id="fileLabelText"></span>
+        </span>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center; padding:13px 20px;">
+      Analyse Resume
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </button>
+  </form>
+
+  <!-- Meta tiles -->
+  <div class="upload-meta">
+    <div class="meta-tile">
+      <div class="meta-tile-key">Privacy</div>
+      <div class="meta-tile-val">Auto-purged · 24 h</div>
+    </div>
+    <div class="meta-tile">
+      <div class="meta-tile-key">Avg Parse Time</div>
+      <div class="meta-tile-val">~3 seconds</div>
+    </div>
+    <div class="meta-tile">
+      <div class="meta-tile-key">Question Coverage</div>
+      <div class="meta-tile-val">Up to 18 skills</div>
+    </div>
+  </div>
+
+  <!-- Progress — shown/hidden by resume.js -->
+  <div id="progress" class="progress-section">
+    <div class="progress-track">
+      <div id="progressBar"></div>
+    </div>
+    <p id="progressText"></p>
+  </div>
+
+  <!-- Skills extracted — populated by resume.js -->
+  <div id="keywords" class="skills-section"></div>
+
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  // ─── Drop Zone wiring ─────────────────────────────────
-  // resume.js reads from #resumeFile; we intercept clicks and drops
-  // to keep the hidden native input in sync.
   (function () {
     const zone      = document.getElementById('dropZone');
     const input     = document.getElementById('resumeFile');
@@ -76,21 +109,15 @@
       zone.classList.add('has-file');
     }
 
-    // Click on zone → open file picker
     zone.addEventListener('click', () => input.click());
     zone.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        input.click();
-      }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
     });
 
-    // Native input changed
     input.addEventListener('change', () => {
       if (input.files.length) markFile(input.files[0].name);
     });
 
-    // Drag events
     zone.addEventListener('dragover',  (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
     zone.addEventListener('dragleave', ()  => zone.classList.remove('drag-over'));
     zone.addEventListener('dragenter', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
@@ -100,7 +127,6 @@
       zone.classList.remove('drag-over');
       const files = e.dataTransfer.files;
       if (files.length && files[0].type === 'application/pdf') {
-        // Transfer dropped file onto the real input
         const dt = new DataTransfer();
         dt.items.add(files[0]);
         input.files = dt.files;
@@ -109,7 +135,5 @@
     });
   })();
 </script>
-
-<!-- Resume upload + skills extraction logic -->
 <script src="{{ url_for('static', filename='js/resume.js') }}"></script>
 {% endblock %}

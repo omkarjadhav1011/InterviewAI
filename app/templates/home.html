@@ -4,201 +4,107 @@
 
 {% block content %}
 
-<!-- ── Welcome Header ───────────────────────────────── -->
-<div class="dash-hero">
-  <div class="dash-hero__text">
-    <p class="dash-hero__greeting">Welcome back,</p>
-    <h1 class="dash-hero__name">{{ user.username if user else 'Guest' }}</h1>
-    <p class="dash-hero__sub">Ready to sharpen your interview skills? Pick up where you left off.</p>
+<!-- ── Hero Meta bar ───────────────────────────────────── -->
+<div class="hero-meta">
+  <span id="heroDate">Today</span>
+  <span class="hero-meta-dot"></span>
+  <span>Streak · <span id="heroStreak">—</span></span>
+  <span class="hero-meta-dot"></span>
+  <span>Ready to practice</span>
+</div>
+
+<!-- ── Hero ──────────────────────────────────────────── -->
+<div class="dash-hero-v2">
+  <div>
+    <h1>Welcome back,<br><em>{{ (user.username if user else 'there') }}.</em></h1>
+    <p>Sharpen your interview skills. Your next session is one click away.</p>
   </div>
-  <a href="{{ url_for('resume.upload') }}" class="dash-hero__cta">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>
-    </svg>
-    Start Interview
+  <a href="{{ url_for('resume.upload') }}" class="btn btn-primary" style="flex-shrink:0; white-space:nowrap;">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+    Start Mock Interview
   </a>
 </div>
 
-<!-- ── Stats Row ─────────────────────────────────────── -->
-<div class="dash-stats">
-
-  <div class="stat-tile">
-    <div class="stat-tile__icon stat-tile__icon--teal">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-      </svg>
-    </div>
-    <div class="stat-tile__body">
-      <div class="stat-tile__value" id="statSessions">—</div>
-      <div class="stat-tile__label">Sessions</div>
+<!-- ── Stats ─────────────────────────────────────────── -->
+<div class="stats-grid">
+  <div class="stat">
+    <div class="stat-key">Sessions</div>
+    <div class="stat-val" id="statSessions">—</div>
+    <div class="stat-delta">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
+      Total completed
     </div>
   </div>
-
-  <div class="stat-tile">
-    <div class="stat-tile__icon stat-tile__icon--violet">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-      </svg>
-    </div>
-    <div class="stat-tile__body">
-      <div class="stat-tile__value" id="statAvgScore">—</div>
-      <div class="stat-tile__label">Avg Score</div>
+  <div class="stat">
+    <div class="stat-key">Avg Score</div>
+    <div class="stat-val" id="statAvgScore">—</div>
+    <div class="stat-delta">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Across all sessions
     </div>
   </div>
-
-  <div class="stat-tile">
-    <div class="stat-tile__icon stat-tile__icon--amber">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
-      </svg>
-    </div>
-    <div class="stat-tile__body">
-      <div class="stat-tile__value" id="statSkills">—</div>
-      <div class="stat-tile__label">Skills Detected</div>
+  <div class="stat">
+    <div class="stat-key">Best Score</div>
+    <div class="stat-val" id="statBestScore">—</div>
+    <div class="stat-delta">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      Personal best
     </div>
   </div>
-
-  <div class="stat-tile">
-    <div class="stat-tile__icon stat-tile__icon--success">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-      </svg>
-    </div>
-    <div class="stat-tile__body">
-      <div class="stat-tile__value" id="statBestScore">—</div>
-      <div class="stat-tile__label">Best Score</div>
+  <div class="stat">
+    <div class="stat-key">Skills Tracked</div>
+    <div class="stat-val" id="statSkills">—</div>
+    <div class="stat-delta neg">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      From your resume
     </div>
   </div>
-
 </div>
 
-<!-- ── Main Grid: Quick Actions + Features ───────────── -->
-<div class="dash-grid">
+<!-- ── Main Grid ─────────────────────────────────────── -->
+<div class="dash-grid-v2">
 
-  <!-- Quick Actions -->
-  <div class="dash-panel">
-    <div class="section-label">Quick Actions</div>
-    <div class="quick-actions">
-
-      <a href="{{ url_for('resume.upload') }}" class="action-card action-card--primary">
-        <div class="action-card__icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
-          </svg>
+  <!-- Recent Sessions -->
+  <div class="sessions-card">
+    <div class="sessions-card-head">
+      <h3>Recent Sessions</h3>
+      <a href="{{ url_for('resume.upload') }}" class="font-mono" style="color:var(--accent);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;text-decoration:none;">New Session →</a>
+    </div>
+    <div class="sessions-card-body">
+      <div id="sessionList">
+        <div class="session-row" style="padding: 28px 0; justify-content: center; grid-template-columns: 1fr;">
+          <div style="text-align:center; color:var(--text-secondary); font-size:14px;">
+            No sessions yet — <a href="{{ url_for('resume.upload') }}" style="color:var(--accent); text-decoration:none;">start your first interview</a>
+          </div>
         </div>
-        <div class="action-card__body">
-          <div class="action-card__title">Upload Resume</div>
-          <div class="action-card__sub">Parse skills &amp; start a new session</div>
-        </div>
-        <svg class="action-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
-      </a>
-
-      <a href="{{ url_for('interview.interview_page') }}" class="action-card">
-        <div class="action-card__icon action-card__icon--violet">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-          </svg>
-        </div>
-        <div class="action-card__body">
-          <div class="action-card__title">Continue Interview</div>
-          <div class="action-card__sub">Jump back into your session</div>
-        </div>
-        <svg class="action-card__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
-      </a>
-
+      </div>
     </div>
   </div>
 
-  <!-- Features / Why MockMinds -->
-  <div class="dash-panel">
-    <div class="section-label">Why MockMinds</div>
-    <div class="feature-grid">
-
-      <div class="feature-card">
-        <div class="feature-card__icon feature-card__icon--teal">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
-          </svg>
-        </div>
-        <div class="feature-card__text">
-          <div class="feature-card__title">AI Evaluation</div>
-          <div class="feature-card__desc">Voice answers scored for confidence, technical depth &amp; communication.</div>
-        </div>
+  <!-- Right column: quick card + skill heatmap -->
+  <div>
+    <a href="{{ url_for('resume.upload') }}" class="quick-card feature">
+      <div class="quick-title">Resume → Mock Interview</div>
+      <div class="quick-sub">Upload a resume, get tailored questions in under 10 seconds. Skills extracted automatically.</div>
+      <div class="quick-cta">
+        Start now
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
       </div>
+    </a>
 
-      <div class="feature-card">
-        <div class="feature-card__icon feature-card__icon--violet">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-          </svg>
-        </div>
-        <div class="feature-card__text">
-          <div class="feature-card__title">Smart Questions</div>
-          <div class="feature-card__desc">Gemini-generated questions tailored to your exact skill set.</div>
-        </div>
-      </div>
+    <div class="card" id="skillHeatmapCard" style="padding:22px; display:none;">
+      <div class="section-eyebrow">Skill Heatmap</div>
+      <div class="skill-list-v2" id="skillHeatmap"></div>
+    </div>
 
-      <div class="feature-card">
-        <div class="feature-card__icon feature-card__icon--amber">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
-          </svg>
-        </div>
-        <div class="feature-card__text">
-          <div class="feature-card__title">Detailed Analytics</div>
-          <div class="feature-card__desc">Track scores per question, see strengths and improvement areas.</div>
-        </div>
-      </div>
-
-      <div class="feature-card">
-        <div class="feature-card__icon feature-card__icon--success">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-        </div>
-        <div class="feature-card__text">
-          <div class="feature-card__title">Hire / No-Hire Verdict</div>
-          <div class="feature-card__desc">Get a hiring-panel-style verdict and final score at the end.</div>
-        </div>
-      </div>
-
+    <div class="card" id="noSkillsCard" style="padding:22px;">
+      <div class="section-eyebrow">Skill Heatmap</div>
+      <p style="font-size:13px; color:var(--text-secondary); line-height:1.6;">
+        Upload a resume to see your skill breakdown here. Skills are extracted and scored automatically.
+      </p>
     </div>
   </div>
 
-</div>
-
-<!-- ── How It Works ───────────────────────────────────── -->
-<div class="dash-panel dash-howto">
-  <div class="section-label">How It Works</div>
-  <div class="steps">
-    <div class="step">
-      <div class="step__num">1</div>
-      <div class="step__body">
-        <div class="step__title">Upload Your Resume</div>
-        <div class="step__desc">PDF parsed instantly — skills extracted automatically.</div>
-      </div>
-    </div>
-    <div class="step__connector" aria-hidden="true"></div>
-    <div class="step">
-      <div class="step__num">2</div>
-      <div class="step__body">
-        <div class="step__title">Answer AI Questions</div>
-        <div class="step__desc">Speak or type — real-time transcription, no setup needed.</div>
-      </div>
-    </div>
-    <div class="step__connector" aria-hidden="true"></div>
-    <div class="step">
-      <div class="step__num">3</div>
-      <div class="step__body">
-        <div class="step__title">Review Your Results</div>
-        <div class="step__desc">Detailed breakdown, verdict, and feedback per answer.</div>
-      </div>
-    </div>
-  </div>
 </div>
 
 {% endblock %}
@@ -206,24 +112,79 @@
 {% block scripts %}
 <script>
 (function () {
-  // Populate stat tiles from user data if available
   {% if user %}
-  const skills = {{ (user.skills or []) | tojson }};
+  const skills  = {{ (user.skills  or []) | tojson }};
   const results = {{ (user.latest_results or []) | tojson }};
 
+  // ── Stats ──────────────────────────────────────────────
   document.getElementById('statSkills').textContent = skills.length || '—';
 
   if (results && results.length) {
     document.getElementById('statSessions').textContent = results.length;
     const scores = results.map(r => r.overall_score).filter(s => s != null);
     if (scores.length) {
-      const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+      const avg  = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
       const best = Math.max(...scores).toFixed(1);
       document.getElementById('statAvgScore').textContent = avg + '/10';
       document.getElementById('statBestScore').textContent = best + '/10';
     }
+
+    // ── Session rows ────────────────────────────────────
+    const list = document.getElementById('sessionList');
+    const verdictClass = (v) => {
+      if (!v) return '';
+      const l = v.toLowerCase();
+      if (l.includes('strong')) return 'v-strong';
+      if (l.includes('hire'))   return 'v-hire';
+      if (l.includes('weak'))   return 'v-weak';
+      if (l.includes('reject')) return 'v-reject';
+      return 'v-hire';
+    };
+    list.innerHTML = '';
+    results.slice(-5).reverse().forEach((r, i) => {
+      const score   = r.overall_score != null ? Number(r.overall_score).toFixed(1) : '—';
+      const verdict = r.verdict || (r.result && r.result.verdict) || '';
+      const date    = r.created_at ? new Date(r.created_at).toLocaleDateString('en-GB', {day:'numeric', month:'short'}) : '';
+      const row = document.createElement('div');
+      row.className = 'session-row';
+      row.innerHTML = `
+        <div class="session-num">${String(results.length - i).padStart(2,'0')}</div>
+        <div>
+          <div class="session-title">${r.title || 'Interview Session'}</div>
+          <div class="session-meta">${date}${r.num_questions ? ' · ' + r.num_questions + ' questions' : ''}</div>
+        </div>
+        <div class="session-score">${score}<small>/10</small></div>
+        ${verdict ? '<div class="session-verdict ' + verdictClass(verdict) + '">' + verdict + '</div>' : '<div></div>'}
+      `;
+      list.appendChild(row);
+    });
+  }
+
+  // ── Skill heatmap ───────────────────────────────────
+  if (skills && skills.length) {
+    document.getElementById('skillHeatmapCard').style.display = '';
+    document.getElementById('noSkillsCard').style.display = 'none';
+    const heatmap = document.getElementById('skillHeatmap');
+    const top = skills.slice(0, 6);
+    heatmap.innerHTML = top.map((s, i) => {
+      const name  = typeof s === 'string' ? s : (s.name || s);
+      const score = typeof s === 'object' && s.score ? Math.min(100, Math.round(s.score)) : Math.max(40, 90 - i * 8);
+      return `
+        <div class="skill-row-v2">
+          <div class="skill-name-v2">${name}</div>
+          <div class="skill-bar-v2"><span style="width:${score}%"></span></div>
+          <div class="skill-val-v2">${score}</div>
+        </div>`;
+    }).join('');
   }
   {% endif %}
+
+  // ── Hero date ──────────────────────────────────────
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const now = new Date();
+  const el = document.getElementById('heroDate');
+  if (el) el.textContent = days[now.getDay()] + ' · ' + months[now.getMonth()] + ' ' + now.getDate();
 })();
 </script>
 {% endblock %}

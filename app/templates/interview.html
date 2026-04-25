@@ -3,33 +3,10 @@
 
 {% block content %}
 
-<div class="interview-container">
+<div class="iv-container">
 
-  <!-- ── Top Status Bar ───────────────────────────── -->
-  <div class="interview-header">
-    <div>
-      <h2>AI Interview Session</h2>
-      <p class="interview-subtext">Speak clearly and confidently. Responses are analysed in real-time.</p>
-    </div>
-    <div class="interview-status">
-      <span class="interview-status__dot"></span>
-      Live Session
-    </div>
-  </div>
-
-  <!-- ── Question Overview (populated by interview.js) ── -->
-  <div class="question-preview">
-    <h3>Interview Overview</h3>
-    <div id="question-list">
-      <div class="loading">
-        <div class="spinner"></div>
-        Loading interview content&hellip;
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Full-page loader while generating questions ── -->
-  <div id="interviewLoader" class="interview-loader">
+  <!-- Full-page loader while generating questions -->
+  <div id="interviewLoader" class="interview-loader" style="display:none;">
     <div class="loader-inner">
       <div class="loader-spinner"></div>
       <div class="loader-title">Generating your questions&hellip;</div>
@@ -37,91 +14,228 @@
     </div>
   </div>
 
-  <!-- ── Interview Grid: Camera + Answer Area ──────── -->
-  <div class="interview-grid">
+  <div class="iv-shell">
 
-    <!-- Camera panel -->
-    <div class="camera">
-      <div class="camera-header">
-        <span class="camera-label">Your Camera</span>
-        <span class="camera-rec"><span class="camera-rec__dot"></span>REC</span>
+    <!-- ── Left rail: question list + pacing ── -->
+    <div class="iv-side">
+
+      <div class="q-rail-card">
+        <div class="q-rail-head">
+          <h4>Session Plan</h4>
+          <div class="q-rail-progress">
+            <strong id="qIndex">0</strong>&thinsp;/&thinsp;<span id="qTotal">0</span>
+          </div>
+        </div>
+        <!-- ID preserved: interview.js populates this -->
+        <div id="question-list" class="q-list-v2">
+          <div class="loading" style="display:flex;align-items:center;gap:10px;padding:12px 8px;color:var(--text-secondary);font-size:13px;">
+            <div class="spinner" style="width:16px;height:16px;"></div>
+            Loading&hellip;
+          </div>
+        </div>
       </div>
-      <video id="camera" autoplay playsinline muted></video>
+
+      <div class="iv-pacing" id="iv-pacing" style="display:none;">
+        <div class="iv-pacing-label">Pacing</div>
+        <div class="iv-pacing-time" id="iv-elapsed">0:00 <small>elapsed</small></div>
+        <div class="iv-pace-track"><div class="iv-pace-fill" id="iv-pace-fill"></div></div>
+      </div>
+
     </div>
 
-    <!-- AI Interaction Area -->
-    <div class="center">
+    <!-- ── Center: question stage + answer panel ── -->
+    <div class="iv-center">
 
-      <!-- Current question -->
-      <h3 id="question-text">Waiting for question&hellip;</h3>
-
-      <!-- Progress -->
-      <div id="progressDisplay" class="progress-display">
-        Question <span id="qIndex">0</span> of <span id="qTotal">0</span>
+      <!-- Question stage -->
+      <div class="iv-stage">
+        <div class="iv-q-meta">
+          <span class="iv-q-tag" id="iv-q-tag">Question 01</span>
+          <span id="iv-q-category" style="color:var(--text-dim);">—</span>
+          <span id="progressDisplay" class="progress-display" style="display:none;">
+            Q<span id="_qIndex2"></span>/<span id="_qTotal2"></span>
+          </span>
+        </div>
+        <div id="question-text" class="iv-question">Waiting for question&hellip;</div>
+        <div class="iv-hint">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--violet);" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <div>
+            <strong>Calm tip</strong>
+            Think out loud — partial answers score better than silence. Take a breath and start with what you know.
+          </div>
+        </div>
       </div>
 
-      <!-- Transcript -->
-      <div id="transcript">
-        <strong>Transcript</strong>
-        <p id="transcriptText">Press start to begin recording&hellip;</p>
-      </div>
+      <!-- Answer panel -->
+      <div class="iv-answer">
+        <div class="iv-answer-head">
+          <h4>Your answer</h4>
+          <div class="iv-tabs">
+            <span class="iv-tab on" id="tab-voice-btn">Voice</span>
+            <span class="iv-tab" id="tab-type-btn">Type</span>
+          </div>
+        </div>
 
-      <!-- AI Feedback (populated dynamically) -->
-      <div id="feedback"></div>
+        <div class="iv-transcript-wrap">
+          <!-- Voice transcript (ID preserved for interview.js) -->
+          <div id="iv-voice-panel">
+            <div id="transcript" style="background:none;border:none;padding:0;min-height:0;">
+              <strong style="display:none;">Transcript</strong>
+              <p id="transcriptText" style="font-size:14px;line-height:1.65;color:var(--text);">Press the mic to begin recording&hellip;</p>
+            </div>
+            <!-- AI Feedback (populated dynamically by interview.js) -->
+            <div id="feedback"></div>
+          </div>
 
-      <!-- Optional typed answer -->
-      <div id="typedAnswerArea" class="typed-answer-area">
-        <label for="typedAnswerInput" class="field-label-sm">Typed Answer (optional)</label>
-        <textarea
-          id="typedAnswerInput"
-          rows="4"
-          class="typed-answer-input"
-          placeholder="Type your answer or add extra context here…"
-        ></textarea>
-      </div>
+          <!-- Type panel (ID preserved for interview.js) -->
+          <div id="typedAnswerArea" class="typed-answer-area" style="display:none;">
+            <textarea
+              id="typedAnswerInput"
+              rows="6"
+              class="typed-answer-input"
+              placeholder="Type your answer or add extra context here…"
+            ></textarea>
+          </div>
+        </div>
 
-      <!-- STT Mode Selector -->
-      <div id="sttModeArea" class="stt-mode-area">
-        <label for="sttModeSelect" class="field-label-sm">Transcription Mode</label>
-        <div class="stt-mode-row">
+        <!-- STT mode selector -->
+        <div id="sttModeArea" class="iv-stt-row">
+          <label for="sttModeSelect" class="field-label-sm">Mode</label>
           <select id="sttModeSelect" class="stt-select">
             <option value="assemblyai">AssemblyAI (online)</option>
             <option value="whisper">Whisper (offline)</option>
           </select>
           <span id="whisperStatusEl" class="whisper-status"></span>
         </div>
+
+        <!-- Controls -->
+        <div class="iv-bottom">
+          <button id="startTranscriptionBtn" class="iv-mic" title="Start recording">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </button>
+          <button id="stopTranscriptionBtn" class="iv-mic rec" title="Stop recording" disabled style="display:none;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          </button>
+
+          <div class="iv-wave" id="iv-wave">
+            {% for i in range(28) %}
+            <span style="animation-delay: {{ loop.index0 * 0.05 }}s;"></span>
+            {% endfor %}
+          </div>
+
+          <div class="iv-timer" id="iv-timer">0:00</div>
+
+          <button id="nextBtn" class="btn btn-ghost iv-next-btn">
+            Next
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+        </div>
       </div>
 
-      <!-- Controls -->
-      <div class="controls">
-        <button id="startTranscriptionBtn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
-          </svg>
-          Start Speaking
-        </button>
-        <button id="stopTranscriptionBtn" disabled>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="3" width="18" height="18" rx="2"/>
-          </svg>
-          Stop
-        </button>
-        <button id="nextBtn">
-          Next Question
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
-          </svg>
-        </button>
+    </div><!-- /.iv-center -->
+
+    <!-- ── Right rail: camera + signal ── -->
+    <div class="iv-side">
+
+      <div class="iv-camera">
+        <video id="camera" autoplay playsinline muted></video>
+        <div class="iv-camera-overlay">
+          <div class="iv-cam-tag">REC</div>
+        </div>
       </div>
 
-    </div>
-  </div>
+      <div class="iv-signal">
+        <h4>Live signal</h4>
+        <div class="iv-signal-row">
+          <div class="iv-signal-name">Confidence</div>
+          <div class="iv-signal-val" id="sig-conf">—</div>
+          <div class="iv-signal-track">
+            <div class="iv-signal-fill" id="sig-conf-bar" style="width:0%;background:var(--accent);"></div>
+          </div>
+        </div>
+        <div class="iv-signal-row">
+          <div class="iv-signal-name">Clarity</div>
+          <div class="iv-signal-val" id="sig-clarity">—</div>
+          <div class="iv-signal-track">
+            <div class="iv-signal-fill" id="sig-clarity-bar" style="width:0%;background:var(--violet);"></div>
+          </div>
+        </div>
+        <div class="iv-signal-row">
+          <div class="iv-signal-name">Technical depth</div>
+          <div class="iv-signal-val" id="sig-tech">—</div>
+          <div class="iv-signal-track">
+            <div class="iv-signal-fill" id="sig-tech-bar" style="width:0%;background:var(--amber);"></div>
+          </div>
+        </div>
+      </div>
 
-</div>
+      <div class="iv-signal">
+        <h4>Current skill</h4>
+        <div id="iv-skill-label" style="font-size:14px;font-weight:600;margin-bottom:4px;color:var(--text);">—</div>
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;" id="iv-skill-hint">Answer the question above.</div>
+      </div>
 
-<!-- Whisper STT (ES module — sets window.WhisperSTT; loaded lazily on mode switch) -->
+    </div><!-- /.iv-side right -->
+
+  </div><!-- /.iv-shell -->
+
+</div><!-- /.iv-container -->
+
+<!-- Whisper STT (ES module) -->
 <script type="module" src="{{ url_for('static', filename='js/whisper_transcription.js') }}"></script>
 <!-- Interview logic (IDs preserved) -->
 <script src="{{ url_for('static', filename='js/interview.js') }}"></script>
+
+<script>
+(function () {
+  // Tab switching: Voice / Type
+  const voiceBtn = document.getElementById('tab-voice-btn');
+  const typeBtn  = document.getElementById('tab-type-btn');
+  const voicePanel = document.getElementById('iv-voice-panel');
+  const typePanel  = document.getElementById('typedAnswerArea');
+
+  function showVoice() {
+    voicePanel.style.display = '';
+    typePanel.style.display  = 'none';
+    voiceBtn.classList.add('on');
+    typeBtn.classList.remove('on');
+  }
+  function showType() {
+    voicePanel.style.display = 'none';
+    typePanel.style.display  = '';
+    typeBtn.classList.add('on');
+    voiceBtn.classList.remove('on');
+  }
+  if (voiceBtn) voiceBtn.addEventListener('click', showVoice);
+  if (typeBtn)  typeBtn.addEventListener('click', showType);
+
+  // Mic wave animation toggle
+  const wave     = document.getElementById('iv-wave');
+  const startBtn = document.getElementById('startTranscriptionBtn');
+  const stopBtn  = document.getElementById('stopTranscriptionBtn');
+  if (startBtn) {
+    startBtn.addEventListener('click', () => {
+      if (wave) wave.classList.add('active');
+    });
+  }
+  if (stopBtn) {
+    stopBtn.addEventListener('click', () => {
+      if (wave) wave.classList.remove('active');
+    });
+  }
+
+  // Timer
+  let elapsed = 0, timerInterval;
+  const timerEl = document.getElementById('iv-timer');
+  function startTimer() {
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      elapsed++;
+      const m = Math.floor(elapsed/60), s = elapsed%60;
+      if (timerEl) timerEl.textContent = m + ':' + String(s).padStart(2,'0');
+    }, 1000);
+  }
+  startTimer();
+})();
+</script>
 
 {% endblock %}
