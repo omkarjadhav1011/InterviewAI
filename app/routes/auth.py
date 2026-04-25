@@ -21,7 +21,6 @@ class User(UserMixin):
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        users = get_db().users
         username = request.form.get('username', '').strip()
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
@@ -34,11 +33,18 @@ def register():
         if len(password) < 8:
             flash('Password must be at least 8 characters')
             return redirect(url_for('auth.register'))
-        if users.find_one({'email': email}):
-            flash('Email already registered')
+        try:
+            users = get_db().users
+            if users.find_one({'email': email}):
+                flash('Email already registered')
+                return redirect(url_for('auth.register'))
+            pw_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            users.insert_one({'username': username, 'email': email, 'password': pw_hash, 'skills': [], 'results': []})
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception('Registration DB error')
+            flash('Service temporarily unavailable. Please try again later.')
             return redirect(url_for('auth.register'))
-        pw_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-        users.insert_one({'username': username, 'email': email, 'password': pw_hash, 'skills': [], 'results': []})
         flash('Registered. Please login.')
         return redirect(url_for('auth.login'))
     return render_template('register.html')
@@ -47,13 +53,19 @@ def register():
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        users = get_db().users
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
         if not email or not password:
             flash('Email and password are required')
             return redirect(url_for('auth.login'))
-        user_doc = users.find_one({'email': email})
+        try:
+            users = get_db().users
+            user_doc = users.find_one({'email': email})
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('Login DB error')
+            flash('Service temporarily unavailable. Please try again later.')
+            return redirect(url_for('auth.login'))
         if user_doc and bcrypt.checkpw(password.encode('utf-8'), user_doc['password']):
             user = User(user_doc)
             login_user(user)
