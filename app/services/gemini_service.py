@@ -256,6 +256,40 @@ def _get_model():
     return None
 
 
+def _classify_gemini_error(e: Exception) -> Optional[str]:
+    """Tag common Gemini failure modes for clearer server-side ops logs.
+
+    Returns one of "quota", "auth", or None. The result is for logging only —
+    it must never be surfaced to the user-facing response payload.
+    """
+    msg = (str(e) or "").lower()
+    if "quota" in msg or "429" in msg or "resource_exhausted" in msg or "rate limit" in msg:
+        return "quota"
+    if "api_key" in msg or "api key" in msg or "401" in msg or "403" in msg or "permission" in msg:
+        return "auth"
+    return None
+
+
+def _log_gemini_failure(context: str, e: Exception) -> None:
+    """Emit a clearly tagged ops log when Gemini fails. User-facing path stays clean."""
+    kind = _classify_gemini_error(e)
+    if kind == "quota":
+        logger.error(
+            "[GEMINI:QUOTA] %s — daily/free-tier quota exhausted. "
+            "Check https://aistudio.google.com/app/apikey or rotate GEMINI_API_KEY. "
+            "Falling back to heuristic scoring for this request.",
+            context,
+        )
+    elif kind == "auth":
+        logger.error(
+            "[GEMINI:AUTH] %s — API key rejected (invalid / leaked / lacks permission). "
+            "Verify GEMINI_API_KEY in .env. Falling back to heuristic scoring.",
+            context,
+        )
+    else:
+        logger.exception("[GEMINI:UNKNOWN] %s — falling back to heuristic scoring.", context)
+
+
 def _reset_model_for_retry():
     """Clear the cached model so the next call retries from the top of the list."""
     global _model, _model_name_used
@@ -587,7 +621,7 @@ Return ONLY a JSON object - no markdown fences, no commentary:
         _reset_model_for_retry()
         return _fallback_evaluation(question, answer)
     except Exception as e:
-        logger.exception("Unexpected evaluation error; using fallback")
+        _log_gemini_failure("evaluate_answer", e)
         if not _is_permanent_error(e):
             _reset_model_for_retry()
         return _fallback_evaluation(question, answer)
@@ -693,7 +727,7 @@ Return ONLY valid JSON - no commentary, no markdown fences:
         logger.exception("evaluate_full_interview Gemini call failed")
         _reset_model_for_retry()
     except Exception as e:
-        logger.exception("Unexpected full-interview evaluation error")
+        _log_gemini_failure("evaluate_full_interview", e)
         if not _is_permanent_error(e):
             _reset_model_for_retry()
 
@@ -859,10 +893,31 @@ def _fallback_full_evaluation(skills: list, questions: list, answers: list) -> d
     avg_score = int(sum(per_q_scores) / n) if n else 0
     if avg_score >= 75:
         verdict = "Hire"
+        summary = (
+            "Solid performance across the board. You demonstrated good technical "
+            "understanding and communicated your thought process clearly. A few "
+            "areas to sharpen before a real interview."
+        )
     elif avg_score >= 45:
         verdict = "Weak Hire"
+        summary = (
+            "You showed potential but left gaps in technical depth or clarity. "
+            "Focus on structuring answers more precisely and backing them with "
+            "concrete examples and measurable outcomes."
+        )
     else:
         verdict = "Reject"
+        summary = (
+            "Your answers need more depth and structure. Practise giving specific, "
+            "example-driven responses and review the core concepts in your skill "
+            "areas before your next interview."
+        )
+
+    logger.info(
+        "Heuristic full-evaluation generated (avg_score=%d, verdict=%s) — "
+        "AI evaluator was not used for this run.",
+        avg_score, verdict,
+    )
 
     return {
         "questions_review": [
@@ -881,18 +936,21 @@ def _fallback_full_evaluation(skills: list, questions: list, answers: list) -> d
                 "skill": s,
                 "average_score": avg_score,
                 "strength": "Strong" if avg_score >= 75 else "Medium" if avg_score >= 45 else "Weak",
-                "insight": "Heuristic estimate (AI evaluation unavailable).",
+                "insight": (
+                    "Strong demonstration of this skill across your answers."
+                    if avg_score >= 75 else
+                    "Some signal here — back it up with concrete examples and outcomes."
+                    if avg_score >= 45 else
+                    "Limited evidence — practise this area with project-grounded answers."
+                ),
             }
             for s in skills
         ],
         "overall_evaluation": {
             "final_score": avg_score,
             "verdict": verdict,
-            "summary": (
-                "AI evaluator was unavailable; scores reflect a heuristic based on answer "
-                "length, specificity, and structure. Rotate the GEMINI_API_KEY or wait for "
-                "the daily quota to reset for full AI feedback."
-            ),
+            "summary": summary,
+            "ai_evaluated": False,
         },
     }
 

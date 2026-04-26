@@ -13,6 +13,8 @@
     <div>
       <h1 id="verdict-heading">—</h1>
       <p class="verdict-summary-v2" id="verdict-summary-text"></p>
+      <div id="performance-snapshot" style="margin-top:14px;max-width:560px;"></div>
+      <div id="snapshot-stats" style="display:flex;gap:28px;margin-top:18px;flex-wrap:wrap;"></div>
     </div>
     <div class="verdict-score-card">
       <div class="verdict-tag-pill" id="verdict-tag-pill">
@@ -283,7 +285,21 @@ if (fullEval && fullEval.overall_evaluation) {
   const oe      = fullEval.overall_evaluation;
   const verdict = (oe.verdict || '').trim();
   const score   = oe.final_score || 0;
-  const summary = oe.summary || '';
+  let   summary = oe.summary || '';
+
+  // Defensive: scrub any legacy dev-error text that may exist on older DB rows.
+  // These phrases must never reach the user — they belong only in server logs.
+  const BANNED_SUMMARY_RE = /(rotate the gemini|gemini[_ ]?api[_ ]?key|daily quota|ai evaluator was unavailable|heuristic based on answer|quota to reset)/i;
+  if (BANNED_SUMMARY_RE.test(summary)) summary = '';
+
+  // Verdict-keyed analytical fallback if backend gave us nothing usable.
+  const VERDICT_SUMMARY = {
+    'Strong Hire': 'You demonstrated strong technical depth and communicated your ideas clearly. Your answers showed both breadth of knowledge and confidence under pressure.',
+    'Hire':        'Solid performance across the board. You showed good technical understanding and communicated your thought process well — a few areas to sharpen before the real interview.',
+    'Weak Hire':   'You showed potential but left gaps in technical depth or clarity. Focus on structuring answers more precisely and backing them with concrete examples.',
+    'Reject':      'Your answers need more depth and structure. Practise giving specific, example-driven responses and review the core concepts in your skill areas before your next interview.',
+  };
+  if (!summary) summary = VERDICT_SUMMARY[verdict] || VERDICT_SUMMARY['Weak Hire'];
 
   const banner = document.getElementById('verdictBanner');
   if (banner) {
@@ -309,6 +325,61 @@ if (fullEval && fullEval.overall_evaluation) {
     requestAnimationFrame(() => setTimeout(() => {
       document.getElementById('verdict-prog-bar').style.width = Math.min(100, Number(score)) + '%';
     }, 200));
+
+    // ── Performance snapshot: strongest / weakest dimension callouts + key stats
+    const avg100 = (key) => {
+      const vals = results.map(r => Number((r.result || {})[key] || 0)).filter(v => v > 0);
+      return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : 0;
+    };
+    const dims = [
+      { key: 'Confidence',    val: avg100('confidence')    },
+      { key: 'Technical',     val: avg100('technical')     },
+      { key: 'Communication', val: avg100('communication') },
+    ].filter(d => d.val > 0).sort((a, b) => b.val - a.val);
+
+    const strongMsg = {
+      'Confidence':    'You came across as assured and direct in your responses.',
+      'Technical':     'Your technical knowledge stood out as the strongest aspect of your performance.',
+      'Communication': 'Your ability to articulate ideas clearly was a highlight.',
+    };
+    const weakMsg = {
+      'Confidence':    'Work on speaking with more conviction — avoid hedging phrases like "I think" or "maybe".',
+      'Technical':     'Deepen your technical answers with specific metrics, tools, or implementation details.',
+      'Communication': 'Practise the STAR method (Situation → Task → Action → Result) to improve answer structure.',
+    };
+
+    const snapshotEl = document.getElementById('performance-snapshot');
+    if (snapshotEl && dims.length) {
+      const strongest = dims[0];
+      const weakest   = dims[dims.length - 1];
+      const lines = [];
+      if (strongest.val >= 60) lines.push(strongMsg[strongest.key]);
+      if (weakest.val < 60 && weakest.key !== strongest.key) lines.push(weakMsg[weakest.key]);
+      snapshotEl.innerHTML = lines
+        .filter(Boolean)
+        .map(l => `<p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin:0 0 8px 0;">${escHtml(l)}</p>`)
+        .join('');
+    }
+
+    const statsEl = document.getElementById('snapshot-stats');
+    if (statsEl) {
+      const wordCount = (a) => (a || '').toString().trim().split(/\s+/).filter(Boolean).length;
+      const totalWords = results.reduce((s, r) => s + wordCount(r.answer || r.final || r.transcript || r.typed), 0);
+      const avgWords   = results.length ? Math.round(totalWords / results.length) : 0;
+      const strongest  = dims[0] || { key: '—', val: 0 };
+      const weakest    = dims[dims.length - 1] || { key: '—', val: 0 };
+      const stat = (label, value, color) => `
+        <div>
+          <p style="font-size:10px;font-family:var(--font-mono);letter-spacing:0.08em;text-transform:uppercase;color:var(--text-secondary);margin:0 0 4px 0;">${label}</p>
+          <p style="font-size:18px;font-family:var(--font-mono);color:${color || 'var(--text)'};margin:0;">${value}</p>
+        </div>`;
+      statsEl.innerHTML = [
+        stat('Questions',       results.length || 0),
+        stat('Avg Words',       avgWords),
+        stat('Strongest',       strongest.key, 'var(--accent)'),
+        stat('To Improve',      weakest.key,   'var(--amber)'),
+      ].join('');
+    }
   }
 
   // Skill summary chips
