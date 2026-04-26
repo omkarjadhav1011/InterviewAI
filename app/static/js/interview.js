@@ -1,548 +1,581 @@
 // ======================================================
-// Combined interview.js with real-time transcription + AI logic
+// interview.js — state-machine driven recording + Q&A flow
 // ======================================================
 
-// HTML elements - moved to DOMContentLoaded for reliability
-let cameraEl;
-let startBtn;
-let stopBtn;
-let nextBtn;
-let typedAnswerInput;
-let questionText;
-let transcriptDiv;
-let feedbackDiv;
-let qIndex;
-let qTotal;
+// ── Module state ──────────────────────────────────────
+let interviewState       = 'loading';
+let currentQuestionIndex = 0;
+let totalQuestions       = 5;
+let currentQuestion      = null;
+let liveTranscript       = '';   // accumulates while recording
+let finalTranscript      = '';   // locked after Stop
+let mediaStream          = null;
+let audioContext         = null;
+let processor            = null;
+let wsConnection         = null;
+let ttsAudio             = null;
 
-// Global state
-let currentQuestion = null;
-let questionNumber = 0;
-let totalQuestions = 5;
-let mediaStream = null;
-let websocket = null;
-let audioContext = null;
-let processor = null;
-let isRecording = false;
-let evaluationInProgress = false;
-let accumulatedTranscript = ""; // Accumulates final transcript segments from AssemblyAI
+// STT mode (assemblyai | whisper)
+let sttMode             = 'assemblyai';
+let whisperInitialized  = false;
 
-// STT mode state
-let sttMode = "assemblyai"; // 'assemblyai' | 'whisper'
-let whisperInitialized = false;
-let whisperStatusEl = null;
-let sttModeSelect = null;
+// Element refs (resolved at DOMContentLoaded)
+let cameraEl, btnStart, btnStop, btnNext, typedAnswerInput;
+let questionTextEl, transcriptEl, transcriptTextEl, feedbackDiv;
+let qIndex, qTotal, sttModeSelect, whisperStatusEl;
 
 const WHISPER_MSGS = {
-  loading: "Loading Whisper model\u2026",
-  downloading: "Downloading model (first time only)\u2026",
-  ready: "Whisper ready",
-  transcribing: "Transcribing\u2026",
-  error: "Whisper unavailable \u2014 using Web Speech API fallback",
-  "ready-fallback": "Using Web Speech API fallback",
+  loading: 'Loading Whisper model…',
+  downloading: 'Downloading model (first time only)…',
+  ready: 'Whisper ready',
+  transcribing: 'Transcribing…',
+  error: 'Whisper unavailable — using Web Speech API fallback',
+  'ready-fallback': 'Using Web Speech API fallback',
 };
 
+const TRANSCRIPT_PLACEHOLDER = 'Press the mic to begin recording…';
+
 // ======================================================
-// CAMERA + AUDIO SETUP
+// STATE MACHINE — single source of truth for UI control
+// ======================================================
+function setState(newState) {
+  console.log(`[state] ${interviewState} → ${newState}`);
+  interviewState = newState;
+
+  const ui = {
+    'loading':      { startVis: true,  startDis: true,  stopVis: false, stopDis: true,  nextDis: true,  msg: 'Loading question…' },
+    'tts_playing':  { startVis: true,  startDis: true,  stopVis: false, stopDis: true,  nextDis: true,  msg: 'Listen to the question…' },
+    'idle':         { startVis: true,  startDis: false, stopVis: false, stopDis: true,  nextDis: false, msg: TRANSCRIPT_PLACEHOLDER },
+    'recording':    { startVis: false, startDis: true,  stopVis: true,  stopDis: false, nextDis: true,  msg: '● Recording — click stop when done' },
+    'recorded':     { startVis: true,  startDis: false, stopVis: false, stopDis: true,  nextDis: false, msg: 'Answer captured — click Next to submit' },
+    'submitting':   { startVis: true,  startDis: true,  stopVis: false, stopDis: true,  nextDis: true,  msg: 'Evaluating answer…' },
+    'next_loading': { startVis: true,  startDis: true,  stopVis: false, stopDis: true,  nextDis: true,  msg: 'Loading next question…' },
+    'complete':     { startVis: true,  startDis: true,  stopVis: false, stopDis: true,  nextDis: true,  msg: 'Interview complete — redirecting…' },
+  };
+
+  const cfg = ui[newState] || ui['idle'];
+  if (btnStart) {
+    btnStart.disabled      = cfg.startDis;
+    btnStart.style.display = cfg.startVis ? '' : 'none';
+  }
+  if (btnStop) {
+    btnStop.disabled       = cfg.stopDis;
+    btnStop.style.display  = cfg.stopVis  ? '' : 'none';
+  }
+  if (btnNext) {
+    btnNext.disabled = cfg.nextDis;
+  }
+
+  // Mic-wave animation reflects the actual recording state
+  const wave = document.getElementById('iv-wave');
+  if (wave) wave.classList.toggle('active', newState === 'recording');
+}
+
+// ======================================================
+// HELPERS
+// ======================================================
+function updateTranscriptDisplay(text) {
+  if (transcriptTextEl) transcriptTextEl.textContent = text || '';
+}
+
+function getTypedAnswer() {
+  return typedAnswerInput ? typedAnswerInput.value : '';
+}
+
+function clearTypedAnswer() {
+  if (typedAnswerInput) typedAnswerInput.value = '';
+}
+
+function getCurrentQuestionText() {
+  return currentQuestion || (questionTextEl ? questionTextEl.textContent.trim() : '');
+}
+
+function showNotice(message, type = 'info') {
+  if (!feedbackDiv) { console.warn('[notice]', message); return; }
+  const colors = { info: '#00bcd4', warning: '#ffb84d', error: '#ff6b6b' };
+  feedbackDiv.innerHTML = `
+    <div style="padding:0.75rem 1rem;border-radius:8px;background:rgba(255,255,255,0.04);border-left:3px solid ${colors[type] || colors.info};color:#ddd;margin-top:0.5rem;">
+      ${message}
+    </div>`;
+  clearTimeout(feedbackDiv._noticeTimer);
+  feedbackDiv._noticeTimer = setTimeout(() => {
+    if (feedbackDiv && feedbackDiv.firstElementChild &&
+        feedbackDiv.firstElementChild.style &&
+        feedbackDiv.firstElementChild.style.borderLeft) {
+      feedbackDiv.innerHTML = '';
+    }
+  }, 6000);
+}
+
+async function fetchJSON(url, options = {}) {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...options,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.data   = data;
+    throw err;
+  }
+  return data;
+}
+
+function storeScore(index, result) {
+  try {
+    const scores = JSON.parse(sessionStorage.getItem('interviewScores') || '[]');
+    scores[index] = result;
+    sessionStorage.setItem('interviewScores', JSON.stringify(scores));
+  } catch (_) { /* ignore */ }
+}
+
+function setNextLabel(text) {
+  if (!btnNext) return;
+  for (const node of btnNext.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+      node.textContent = text + ' ';
+      return;
+    }
+  }
+  btnNext.insertBefore(document.createTextNode(text + ' '), btnNext.firstChild);
+}
+
+// ======================================================
+// CAMERA + MIC SETUP
 // ======================================================
 async function initCamera() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true,
-    });
-    cameraEl.srcObject = stream;
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    if (cameraEl) cameraEl.srcObject = stream;
     mediaStream = stream;
   } catch (err) {
-    console.error("Camera init failed:", err);
-    alert("Camera or microphone access denied!");
+    console.error('Camera/mic init failed:', err);
+    showNotice('Camera or microphone access denied. You can still type your answers.', 'warning');
   }
 }
 
 // ======================================================
-// LOAD CURRENT QUESTION
+// QUESTION LOADING
 // ======================================================
-async function loadCurrentQuestion() {
-  const loader = document.getElementById("interviewLoader");
-  if (loader) loader.style.display = "flex";
+async function loadQuestion(index) {
+  setState(index === 0 ? 'loading' : 'next_loading');
+  finalTranscript = '';
+  liveTranscript  = '';
+  clearTypedAnswer();
+  updateTranscriptDisplay(TRANSCRIPT_PLACEHOLDER);
+  if (feedbackDiv) feedbackDiv.innerHTML = '';
 
   try {
-    const res = await fetch(`/get_questions?question=${questionNumber}`);
-    const data = await res.json();
+    const data = await fetchJSON(`/get_questions?question=${index}`);
+    if (!data.currentQuestion) throw new Error('No question received from server');
 
-    if (data.currentQuestion) {
-      currentQuestion = data.currentQuestion;
-      totalQuestions = data.totalQuestions;
+    currentQuestion = data.currentQuestion;
+    totalQuestions  = data.totalQuestions || totalQuestions;
+    renderQuestion(data);
 
-      // Update progress
-      qTotal.innerText = totalQuestions;
-      qIndex.innerText = data.progress.current;
-
-      // Show the question
-      showQuestion();
-
-      // Update preview section if exists
-      const previewDiv = document.getElementById("question-list");
-      if (previewDiv) {
-        previewDiv.innerHTML = `
-                    <div class="progress-bar" style="width: 100%; height: 4px; background: rgba(255,255,255,0.1); margin-bottom: 1rem;">
-                        <div style="width: ${data.progress.completed}%; height: 100%; background: #00bcd4; transition: width 0.3s ease;"></div>
-                    </div>
-                    <div style="color: #00bcd4; margin-bottom: 1rem;">
-                        Question ${data.progress.current} of ${data.progress.total}
-                    </div>
-                    <div style="color: #ddd;">
-                        Current Question:<br>
-                        <strong>${data.currentQuestion}</strong>
-                    </div>
-                `;
-      }
-
-      // Handle last question state
-      nextBtn.textContent = data.isLastQuestion
-        ? "Finish Interview"
-        : "Next Question";
-    } else {
-      throw new Error("No question received from server");
-    }
+    await playTTS(currentQuestion);
+    setState('idle');
+    updateTranscriptDisplay(TRANSCRIPT_PLACEHOLDER);
   } catch (err) {
-    console.error("Error loading question:", err);
-    questionText.innerText =
-      "Error loading question. Please try refreshing the page.";
-  } finally {
-    if (loader) loader.style.display = "none";
+    console.error('[loadQuestion]', err);
+    if (questionTextEl) questionTextEl.textContent = 'Error loading question. Please refresh the page.';
+    showNotice('Failed to load question — please refresh.', 'error');
+    // Stay in loading; do not let user submit against an unknown question.
+  }
+}
+
+function renderQuestion(data) {
+  if (questionTextEl) questionTextEl.textContent = data.currentQuestion;
+  if (qTotal)         qTotal.innerText = data.totalQuestions || totalQuestions;
+  if (qIndex && data.progress) qIndex.innerText = data.progress.current;
+
+  const tag = document.getElementById('iv-q-tag');
+  if (tag) {
+    const n = (data.progress && data.progress.current) || (currentQuestionIndex + 1);
+    tag.textContent = `Question ${String(n).padStart(2, '0')}`;
+  }
+
+  const previewDiv = document.getElementById('question-list');
+  if (previewDiv && data.progress) {
+    previewDiv.innerHTML = `
+      <div class="progress-bar" style="width:100%;height:4px;background:rgba(255,255,255,0.1);margin-bottom:1rem;">
+        <div style="width:${data.progress.completed}%;height:100%;background:#00bcd4;transition:width 0.3s ease;"></div>
+      </div>
+      <div style="color:#00bcd4;margin-bottom:1rem;">
+        Question ${data.progress.current} of ${data.progress.total}
+      </div>
+      <div style="color:#ddd;">
+        Current Question:<br><strong>${data.currentQuestion}</strong>
+      </div>`;
+  }
+
+  setNextLabel(data.isLastQuestion ? 'Finish' : 'Next');
+}
+
+// ======================================================
+// TTS — always resolves, never blocks the flow
+// ======================================================
+async function playTTS(text) {
+  return new Promise((resolve) => {
+    // Stop anything already playing
+    if (ttsAudio) { try { ttsAudio.pause(); } catch (_) {} ttsAudio = null; }
+    if (window.speechSynthesis) { try { window.speechSynthesis.cancel(); } catch (_) {} }
+
+    setState('tts_playing');
+
+    // Backend returns JSON { audio_url, fallback }
+    fetchJSON('/api/tts', { method: 'POST', body: JSON.stringify({ text }) })
+      .then((d) => {
+        if (d && d.audio_url) {
+          ttsAudio = new Audio(d.audio_url);
+          ttsAudio.onended = () => { ttsAudio = null; resolve(); };
+          ttsAudio.onerror = () => { ttsAudio = null; tryBrowserTTS(text, resolve); };
+          ttsAudio.play().catch(() => tryBrowserTTS(text, resolve));
+        } else {
+          tryBrowserTTS(text, resolve);
+        }
+      })
+      .catch(() => tryBrowserTTS(text, resolve));
+  });
+}
+
+function tryBrowserTTS(text, resolve) {
+  if (!window.speechSynthesis) { resolve(); return; }
+  try {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 0.95;
+
+    const safety = setTimeout(() => {
+      try { window.speechSynthesis.cancel(); } catch (_) {}
+      resolve();
+    }, Math.max(8000, text.length * 65));
+
+    utter.onend   = () => { clearTimeout(safety); resolve(); };
+    utter.onerror = () => { clearTimeout(safety); resolve(); };
+    window.speechSynthesis.speak(utter);
+  } catch (_) {
+    resolve();
   }
 }
 
 // ======================================================
-// SHOW CURRENT QUESTION (with TTS playback)
-// ======================================================
-function showQuestion() {
-  if (!currentQuestion) {
-    console.error("No current question to display");
-    return;
-  }
-
-  // Reset UI state
-  accumulatedTranscript = "";
-  transcriptDiv.textContent = "Press start to begin recording...";
-  feedbackDiv.textContent = "";
-  if (typedAnswerInput) typedAnswerInput.value = "";
-  startBtn.disabled = false;
-  stopBtn.disabled = true;
-  nextBtn.disabled = true;
-
-  // Update question text
-  questionText.innerText = currentQuestion;
-
-  // Play question via backend TTS or fallback
-  fetch("/api/tts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: currentQuestion }),
-  })
-    .then((r) => r.json())
-    .then((d) => {
-      if (d.audio_url) {
-        const audio = new Audio(d.audio_url);
-        audio.play();
-      } else {
-        const utterance = new SpeechSynthesisUtterance(currentQuestion);
-        speechSynthesis.speak(utterance);
-      }
-    })
-    .catch((err) => console.error("TTS error:", err));
-}
-
-// ======================================================
-// START REAL-TIME TRANSCRIPTION
+// RECORDING — start
 // ======================================================
 async function startRecording() {
-  if (isRecording) return;
-  isRecording = true;
+  if (interviewState !== 'idle') return;   // guard against double-start
+  setState('recording');
+  liveTranscript = '';
+  updateTranscriptDisplay('Listening…');
 
-  feedbackDiv.textContent = "";
-  startBtn.disabled = true;
-  stopBtn.disabled = false;
-  accumulatedTranscript = "";
+  try {
+    if (!mediaStream || !mediaStream.active) {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
 
-  // ── Whisper (offline) path ──────────────────────────
-  if (sttMode === "whisper") {
-    if (!window.WhisperSTT) {
-      transcriptDiv.textContent = "Whisper not available. Switch to AssemblyAI.";
-      isRecording = false;
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
+    // Whisper (offline) path
+    if (sttMode === 'whisper') {
+      if (!window.WhisperSTT) throw new Error('Whisper not available');
+      await window.WhisperSTT.startRecording(mediaStream);
+      updateTranscriptDisplay('Recording… (click Stop to transcribe)');
       return;
     }
-    transcriptDiv.textContent = "Recording\u2026 (click Stop to transcribe)";
-    await window.WhisperSTT.startRecording(mediaStream);
+
+    // AssemblyAI path — fetch ws_url (token embedded), open WebSocket
+    const tokenData = await fetchJSON('/start_transcription', { method: 'POST' });
+    if (!tokenData.ws_url) throw new Error(tokenData.error || 'No WebSocket URL received');
+
+    wsConnection = new WebSocket(tokenData.ws_url);
+
+    wsConnection.onopen = () => startAudioStreaming();
+
+    wsConnection.onmessage = (event) => {
+      let msg;
+      try { msg = JSON.parse(event.data); } catch (_) { return; }
+
+      // AssemblyAI v3 Universal-Streaming format
+      if (msg.type === 'Turn' && msg.transcript) {
+        if (msg.end_of_turn) {
+          liveTranscript += msg.transcript + ' ';
+          updateTranscriptDisplay(liveTranscript.trim());
+          // Best-effort backup to server
+          fetch('/update_transcript', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: msg.transcript }),
+          }).catch(() => {});
+        } else {
+          updateTranscriptDisplay((liveTranscript + msg.transcript).trim());
+        }
+      } else if (msg.type === 'Begin') {
+        console.log('AssemblyAI session started:', msg.id);
+      } else if (msg.type === 'Termination') {
+        console.log('AssemblyAI session ended:', msg.audio_duration_seconds, 's');
+      }
+    };
+
+    wsConnection.onerror = () => {
+      handleRecordingError('Transcription error — your typed answer can still be used.');
+    };
+
+    wsConnection.onclose = (event) => {
+      // 1000 = we closed it intentionally in stopRecording()
+      if (interviewState === 'recording' && event.code !== 1000) {
+        handleRecordingError('Transcription disconnected — recording stopped.');
+      }
+    };
+  } catch (err) {
+    if (err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
+      handleRecordingError('Microphone access denied. Please type your answer below.');
+    } else {
+      handleRecordingError('Could not start recording: ' + (err && err.message ? err.message : err));
+    }
+  }
+}
+
+// ======================================================
+// PCM16 audio streaming to WebSocket
+// ======================================================
+function startAudioStreaming() {
+  try {
+    audioContext = new AudioContext({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(mediaStream);
+    processor    = audioContext.createScriptProcessor(4096, 1, 1);
+
+    processor.onaudioprocess = (e) => {
+      if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) return;
+      const f32 = e.inputBuffer.getChannelData(0);
+      wsConnection.send(float32ToPCM16(f32));
+    };
+
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+  } catch (err) {
+    console.error('Audio streaming init failed:', err);
+    handleRecordingError('Audio capture failed.');
+  }
+}
+
+function float32ToPCM16(f32) {
+  const buf  = new ArrayBuffer(f32.length * 2);
+  const view = new DataView(buf);
+  for (let i = 0; i < f32.length; i++) {
+    const s = Math.max(-1, Math.min(1, f32[i]));
+    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  return buf;
+}
+
+// ======================================================
+// RECORDING — stop & lock transcript
+// ======================================================
+async function stopRecording() {
+  if (interviewState !== 'recording') return;   // guard against double-stop
+
+  // Whisper path — transcription happens locally on stop
+  if (sttMode === 'whisper') {
+    setState('submitting');   // brief "working" indicator while Whisper decodes
+    if (whisperStatusEl) {
+      whisperStatusEl.textContent = WHISPER_MSGS.transcribing;
+      whisperStatusEl.style.display = 'inline';
+    }
+    try {
+      const text = (await (window.WhisperSTT && window.WhisperSTT.stopRecording())) || '';
+      finalTranscript = text.trim();
+    } catch (err) {
+      console.error('Whisper stop:', err);
+      finalTranscript = '';
+    }
+    if (whisperStatusEl) {
+      whisperStatusEl.textContent = WHISPER_MSGS.ready;
+      whisperStatusEl.style.display = 'none';
+    }
+    updateTranscriptDisplay(finalTranscript || '(no speech detected — type your answer below)');
+    setState('recorded');
     return;
   }
 
-  // ── AssemblyAI (online) path ────────────────────────
-  transcriptDiv.textContent = "Listening...";
+  // AssemblyAI path
+  if (processor)    { try { processor.disconnect(); }   catch (_) {} processor = null; }
+  if (audioContext) { try { audioContext.close(); }     catch (_) {} audioContext = null; }
 
-  try {
-    const response = await fetch("/start_transcription", { method: "POST" });
-    const resData = await response.json();
-
-    if (!resData.ws_url) {
-      throw new Error(resData.error || "No WebSocket URL received from server");
-    }
-
-    websocket = new WebSocket(resData.ws_url);
-
-    websocket.onopen = () => {
-      console.log("Connected to AssemblyAI WebSocket");
-      streamAudioToWebSocket();
-    };
-
-    websocket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      // AssemblyAI v3 Universal-Streaming format
-      // type: "Begin" (session start), "Turn" (transcript), "Termination" (session end)
-      if (data.type === "Turn" && data.transcript) {
-        if (data.end_of_turn) {
-          // Final turn — accumulate the complete utterance
-          accumulatedTranscript += data.transcript + " ";
-          transcriptDiv.textContent = accumulatedTranscript.trim();
-          // Send final text to server for backup
-          fetch("/update_transcript", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: data.transcript }),
-          }).catch(() => {});
-        } else {
-          // Partial/in-progress — show alongside accumulated finals
-          transcriptDiv.textContent = (accumulatedTranscript + data.transcript).trim();
-        }
-      } else if (data.type === "Begin") {
-        console.log("AssemblyAI session started, ID:", data.id);
-      } else if (data.type === "Termination") {
-        console.log("AssemblyAI session ended, duration:", data.audio_duration_seconds, "s");
-      }
-    };
-
-    websocket.onerror = (err) => {
-      console.error("WebSocket error:", err);
-      isRecording = false;
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-      transcriptDiv.textContent = "Connection error. Press start to try again.";
-    };
-
-    websocket.onclose = () => {
-      console.log("WebSocket closed");
-    };
-  } catch (err) {
-    console.error("Error starting transcription:", err);
-    isRecording = false;
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-    transcriptDiv.textContent =
-      "Failed to start transcription. Press start to try again.";
+  if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+    try { wsConnection.send(JSON.stringify({ type: 'Terminate' })); } catch (_) {}
+    try { wsConnection.close(1000, 'User stopped recording'); }       catch (_) {}
   }
+  wsConnection = null;
+
+  // Server-side transcript is more authoritative; fall back to client-accumulated.
+  try {
+    const r = await fetchJSON('/stop_transcription', { method: 'POST' });
+    const serverText = (r && r.transcript) ? r.transcript.trim() : '';
+    finalTranscript = serverText || liveTranscript.trim();
+  } catch (_) {
+    finalTranscript = liveTranscript.trim();
+  }
+
+  updateTranscriptDisplay(finalTranscript || '(no speech detected — type your answer below)');
+  setState('recorded');
 }
 
 // ======================================================
-// STREAM MICROPHONE AUDIO to WebSocket
+// Recovery from any recording-related failure
 // ======================================================
-function streamAudioToWebSocket() {
-  audioContext = new AudioContext({ sampleRate: 16000 });
-  const source = audioContext.createMediaStreamSource(mediaStream);
-  processor = audioContext.createScriptProcessor(4096, 1, 1);
+function handleRecordingError(message) {
+  if (processor)    { try { processor.disconnect(); } catch (_) {} processor = null; }
+  if (audioContext) { try { audioContext.close(); }   catch (_) {} audioContext = null; }
+  if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+    try { wsConnection.close(1000, 'error cleanup'); } catch (_) {}
+  }
+  wsConnection    = null;
+  liveTranscript  = '';
+  finalTranscript = '';
+  updateTranscriptDisplay(TRANSCRIPT_PLACEHOLDER);
+  setState('idle');
+  showNotice(message, 'warning');
+}
 
-  source.connect(processor);
-  processor.connect(audioContext.destination);
+// ======================================================
+// SUBMIT + ADVANCE  (Next button = submit answer & load next)
+// ======================================================
+async function submitAndAdvance() {
+  // Allow submit from 'idle' (typed-only) or 'recorded'
+  if (interviewState !== 'idle' && interviewState !== 'recorded') return;
 
-  processor.onaudioprocess = (e) => {
-    if (!isRecording || !websocket || websocket.readyState !== WebSocket.OPEN)
+  const voice = (finalTranscript || '').trim();
+  const typed = getTypedAnswer().trim();
+
+  if (!voice && !typed) {
+    showNotice('Please record or type an answer before continuing.', 'warning');
+    return;
+  }
+
+  const previousState = interviewState;
+  setState('submitting');
+
+  if (feedbackDiv) {
+    feedbackDiv.innerHTML = `
+      <div style="text-align:center;padding:1rem;">
+        <div style="color:#00bcd4;margin-bottom:0.5rem;">Evaluating your answer…</div>
+        <div style="width:40px;height:40px;border:3px solid #00bcd4;border-top-color:transparent;border-radius:50%;margin:0 auto;animation:spin 1s linear infinite;"></div>
+      </div>`;
+  }
+
+  try {
+    const data = await fetchJSON('/api/evaluate', {
+      method: 'POST',
+      body: JSON.stringify({
+        question:       getCurrentQuestionText(),
+        answer:         voice,
+        typed_answer:   typed,
+        questionNumber: currentQuestionIndex,
+      }),
+    });
+
+    storeScore(currentQuestionIndex, data.result);
+    renderEvaluation(data.result);
+
+    const isLast = !!data.is_last_question || (currentQuestionIndex >= totalQuestions - 1);
+    if (isLast) {
+      setState('complete');
+      const redirect = data.redirect || (data.result && data.result.redirect) || '/results';
+      setTimeout(() => { window.location.href = redirect; }, 2000);
       return;
-
-    const inputData = e.inputBuffer.getChannelData(0);
-    const buffer = new ArrayBuffer(inputData.length * 2);
-    const view = new DataView(buffer);
-    for (let i = 0; i < inputData.length; i++) {
-      const s = Math.max(-1, Math.min(1, inputData[i]));
-      view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
     }
-    websocket.send(buffer);
-  };
-}
 
-function restoreStopBtn() {
-  try {
-    if (stopBtn && stopBtn.dataset && stopBtn.dataset._origHtml) {
-      stopBtn.innerHTML = stopBtn.dataset._origHtml;
-      delete stopBtn.dataset._origHtml;
-    }
-  } catch (e) {
-    console.warn("Could not restore stop button content", e);
+    currentQuestionIndex++;
+    await loadQuestion(currentQuestionIndex);
+  } catch (err) {
+    console.error('[submitAndAdvance]', err);
+    showNotice('Submission failed — please try again.', 'error');
+    // Preserve the captured answer; let user retry.
+    setState(previousState);
   }
 }
 
-// ======================================================
-// STOP TRANSCRIPTION + EVALUATE ANSWER
-// ======================================================
-async function stopRecording() {
-  if (!isRecording || evaluationInProgress) return;
-  evaluationInProgress = true;
-
-  startBtn.disabled = true;
-  stopBtn.disabled = true;
-  nextBtn.disabled = true;
-
-  // Show spinner on the stop/evaluate button while we request the final transcript
-  try {
-    if (stopBtn) {
-      stopBtn.dataset._origHtml = stopBtn.innerHTML;
-      stopBtn.innerHTML =
-        '<div style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.9);border-top-color:transparent;border-radius:50%;margin-right:8px;vertical-align:middle;animation:spin 1s linear infinite;"></div>Stopping...';
-    }
-  } catch (e) {
-    console.warn("Could not set spinner on stop button", e);
-  }
-
-  isRecording = false;
-
-  if (processor) processor.disconnect();
-  if (audioContext) audioContext.close();
-  // Send terminate message to AssemblyAI before closing
-  if (websocket && websocket.readyState === WebSocket.OPEN) {
-    try {
-      websocket.send(JSON.stringify({ type: "Terminate" }));
-    } catch (e) {
-      console.warn("Could not send terminate message", e);
-    }
-  }
-  if (websocket) websocket.close();
-
-  let finalTranscript = "";
-  if (sttMode === "whisper") {
-    // ── Whisper path: decode + transcribe recorded audio ──
-    if (whisperStatusEl) {
-      whisperStatusEl.textContent = "Transcribing\u2026";
-      whisperStatusEl.style.display = "inline";
-    }
-    try {
-      finalTranscript = (await window.WhisperSTT?.stopRecording()) || "";
-    } catch (err) {
-      console.error("Whisper stopRecording error:", err);
-    }
-    if (whisperStatusEl) {
-      whisperStatusEl.textContent = "Whisper ready";
-      whisperStatusEl.style.display = "none";
-    }
-    restoreStopBtn();
-  } else {
-    // ── AssemblyAI path: fetch server transcript ──────────
-    try {
-      const stopRes = await fetch("/stop_transcription", { method: "POST" });
-      const stopData = await stopRes.json();
-      finalTranscript =
-        stopData && stopData.transcript ? stopData.transcript : "";
-      console.log(
-        "Streaming session closed; server transcript length:",
-        finalTranscript.length,
-      );
-    } catch (err) {
-      console.error("Error stopping transcription:", err);
-    } finally {
-      restoreStopBtn();
-    }
-  }
-
-  // Show evaluation in progress
+function renderEvaluation(result) {
+  if (!result || !feedbackDiv) return;
   feedbackDiv.innerHTML = `
-        <div style="text-align: center; padding: 1rem;">
-            <div style="color: #00bcd4; margin-bottom: 0.5rem;">Evaluating your answer...</div>
-            <div style="width: 40px; height: 40px; border: 3px solid #00bcd4; border-top-color: transparent; border-radius: 50%; margin: 0 auto; animation: spin 1s linear infinite;"></div>
-        </div>
-    `;
-
-  // Evaluate answer — prefer: server transcript > client accumulated > displayed text
-  const placeholders = [
-    "Listening...",
-    "Press start to begin recording...",
-    "Connection error. Press start to try again.",
-    "Failed to start transcription. Press start to try again.",
-    "",
-  ];
-  let transcript = "";
-  if (finalTranscript && finalTranscript.trim().length > 0) {
-    transcript = finalTranscript.trim();
-  } else if (accumulatedTranscript && accumulatedTranscript.trim().length > 0) {
-    transcript = accumulatedTranscript.trim();
-  } else {
-    transcript = transcriptDiv.textContent;
-  }
-  if (placeholders.includes(transcript)) transcript = "";
-  const typedVal = (typedAnswerInput && typedAnswerInput.value.trim()) || "";
-  const hasAnswer = transcript.length > 0 || typedVal.length > 0;
-  if (hasAnswer) {
-    try {
-      const evalRes = await fetch("/api/evaluate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: currentQuestion,
-          answer: transcript,
-          questionNumber: questionNumber,
-          typed_answer: typedVal,
-        }),
-      });
-      const evalData = await evalRes.json();
-
-      // Format and display feedback
-      if (evalData.result) {
-        const result = evalData.result;
-        feedbackDiv.innerHTML = `
-                    <div style="padding: 1rem; background: rgba(0,188,212,0.1); border-radius: 8px;">
-                        <div style="margin-bottom: 0.5rem;">
-                            <strong style="color: #00bcd4;">Evaluation Summary:</strong>
-                            <div style="color: #ddd; margin-top: 0.5rem;">${result.summary}</div>
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1rem 0;">
-                            <div>
-                                <div style="color: #00bcd4;">Confidence</div>
-                                <div style="font-size: 1.25rem;">${result.confidence}%</div>
-                            </div>
-                            <div>
-                                <div style="color: #00bcd4;">Technical</div>
-                                <div style="font-size: 1.25rem;">${result.technical}%</div>
-                            </div>
-                            <div>
-                                <div style="color: #00bcd4;">Communication</div>
-                                <div style="font-size: 1.25rem;">${result.communication}%</div>
-                            </div>
-                        </div>
-                        ${
-                          result.feedback
-                            ? `
-                            <div style="margin-top: 0.5rem;">
-                                <strong style="color: #00bcd4;">Feedback:</strong>
-                                <div style="color: #ddd; margin-top: 0.25rem;">${result.feedback}</div>
-                            </div>
-                        `
-                            : ""
-                        }
-                    </div>
-                `;
-
-        // If we got a redirect URL, this was the last question
-        if (result.redirect) {
-          setTimeout(() => {
-            window.location.href = result.redirect;
-          }, 2000);
-          return;
-        }
-      } else {
-        feedbackDiv.innerText = "Evaluation complete!";
-      }
-
-      // Enable next question button
-      nextBtn.disabled = false;
-      startBtn.disabled = false;
-    } catch (err) {
-      feedbackDiv.innerText = "Error evaluating answer.";
-      console.error("Evaluation error:", err);
-      startBtn.disabled = false;
-    }
-  } else {
-    feedbackDiv.innerText = "No answer detected. Please try again.";
-    startBtn.disabled = false;
-    nextBtn.disabled = false;
-  }
-
-  evaluationInProgress = false;
+    <div style="padding:1rem;background:rgba(0,188,212,0.1);border-radius:8px;">
+      ${result.summary ? `
+        <div style="margin-bottom:0.5rem;">
+          <strong style="color:#00bcd4;">Summary:</strong>
+          <div style="color:#ddd;margin-top:0.25rem;">${result.summary}</div>
+        </div>` : ''}
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:0.75rem 0;">
+        <div><div style="color:#00bcd4;">Confidence</div><div style="font-size:1.25rem;">${result.confidence ?? '—'}%</div></div>
+        <div><div style="color:#00bcd4;">Technical</div><div style="font-size:1.25rem;">${result.technical ?? '—'}%</div></div>
+        <div><div style="color:#00bcd4;">Communication</div><div style="font-size:1.25rem;">${result.communication ?? '—'}%</div></div>
+      </div>
+      ${result.feedback ? `
+        <div style="margin-top:0.5rem;">
+          <strong style="color:#00bcd4;">Feedback:</strong>
+          <div style="color:#ddd;margin-top:0.25rem;">${result.feedback}</div>
+        </div>` : ''}
+    </div>`;
 }
 
 // ======================================================
-// NEXT QUESTION
-// (event listener attached after DOM ready)
+// INIT
 // ======================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  cameraEl         = document.getElementById('camera');
+  btnStart         = document.getElementById('startTranscriptionBtn');
+  btnStop          = document.getElementById('stopTranscriptionBtn');
+  btnNext          = document.getElementById('nextBtn');
+  typedAnswerInput = document.getElementById('typedAnswerInput');
+  questionTextEl   = document.getElementById('question-text');
+  transcriptEl     = document.getElementById('transcript');
+  transcriptTextEl = document.getElementById('transcriptText');
+  feedbackDiv      = document.getElementById('feedback');
+  qIndex           = document.getElementById('qIndex');
+  qTotal           = document.getElementById('qTotal');
+  sttModeSelect    = document.getElementById('sttModeSelect');
+  whisperStatusEl  = document.getElementById('whisperStatusEl');
 
-// ======================================================
-// INITIALIZATION AND EVENT LISTENERS
-// ======================================================
-
-// Initialize on page load
-document.addEventListener("DOMContentLoaded", async () => {
-  // Get UI elements after DOM is ready
-  cameraEl = document.getElementById("camera");
-  startBtn = document.getElementById("startTranscriptionBtn");
-  stopBtn = document.getElementById("stopTranscriptionBtn");
-  nextBtn = document.getElementById("nextBtn");
-  typedAnswerInput = document.getElementById("typedAnswerInput");
-
-  // Initialize other UI element references
-  questionText = document.getElementById("question-text");
-  transcriptDiv = document.getElementById("transcript");
-  feedbackDiv = document.getElementById("feedback");
-  qIndex = document.getElementById("qIndex");
-  qTotal = document.getElementById("qTotal");
-
-  if (!startBtn || !stopBtn || !nextBtn) {
-    console.error("Required UI elements not found. Check IDs in HTML.");
+  if (!btnStart || !btnStop || !btnNext) {
+    console.error('Required UI elements not found. Check IDs in HTML.');
     return;
   }
 
   // STT mode selector
-  sttModeSelect = document.getElementById("sttModeSelect");
-  whisperStatusEl = document.getElementById("whisperStatusEl");
+  if (sttModeSelect) {
+    sttModeSelect.addEventListener('change', async () => {
+      sttMode = sttModeSelect.value;
+      if (sttMode === 'whisper' && !whisperInitialized && window.WhisperSTT) {
+        whisperInitialized = true;
+        await window.WhisperSTT.initWhisper((state) => {
+          if (!whisperStatusEl) return;
+          whisperStatusEl.textContent   = WHISPER_MSGS[state] || '';
+          whisperStatusEl.style.display = state === 'ready' ? 'none' : 'inline';
+        });
+      }
+    });
+  }
 
-  sttModeSelect?.addEventListener("change", async () => {
-    sttMode = sttModeSelect.value;
-    if (sttMode === "whisper" && !whisperInitialized && window.WhisperSTT) {
-      whisperInitialized = true;
-      await window.WhisperSTT.initWhisper((state) => {
-        if (!whisperStatusEl) return;
-        whisperStatusEl.textContent = WHISPER_MSGS[state] || "";
-        whisperStatusEl.style.display = state === "ready" ? "none" : "inline";
-      });
-    }
-  });
+  btnStart.addEventListener('click', startRecording);
+  btnStop .addEventListener('click', stopRecording);
+  btnNext .addEventListener('click', submitAndAdvance);
 
-  // Attach event listeners
-  startBtn.addEventListener("click", startRecording);
-  stopBtn.addEventListener("click", stopRecording);
-  nextBtn.addEventListener("click", async () => {
-    if (evaluationInProgress) return;
-
-    questionNumber++;
-    await loadCurrentQuestion();
-
-    // Reset UI state for next question
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-    nextBtn.disabled = true;
-  });
-
-  // Add some CSS for the evaluation spinner
-  const style = document.createElement("style");
-  style.textContent = `
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    `;
+  // Spinner keyframes (shared across this view)
+  const style = document.createElement('style');
+  style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
   document.head.appendChild(style);
 
-  // Initialize camera and first question
-  const loader = document.getElementById("interviewLoader");
-  if (loader) loader.style.display = "flex";
+  // Establish initial UI state before any async work
+  setState('loading');
+
+  const loader = document.getElementById('interviewLoader');
+  if (loader) loader.style.display = 'flex';
 
   try {
     await initCamera();
-    await loadCurrentQuestion(); // Load first question
-
-    console.log("Interview page initialized successfully");
-  } catch (error) {
-    console.error("Error initializing interview:", error);
-    questionText.innerText =
-      "Error initializing interview. Please refresh the page.";
+    await loadQuestion(0);
+  } catch (err) {
+    console.error('Interview init error:', err);
+    if (questionTextEl) questionTextEl.textContent = 'Error initializing interview. Please refresh the page.';
+    showNotice('Failed to initialize interview.', 'error');
   } finally {
-    if (loader) loader.style.display = "none";
+    if (loader) loader.style.display = 'none';
   }
 });
