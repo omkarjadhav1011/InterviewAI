@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Optional
 import logging
 
 # Optional Google Generative AI client import
@@ -8,9 +8,14 @@ try:
 except Exception:
     genai = None
 
+from ..utils.gemini_runtime import call_gemini_with_timeout, parse_json_response
+
 # --- Configuration ---
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+GEMINI_MODEL_NAME = "models/gemini-2.0-flash"
 
+# Timeout default if Flask app context is unavailable (e.g. tools/ scripts)
+_DEFAULT_GEMINI_TIMEOUT = 15
 
 # --- Logging setup ---
 logger = logging.getLogger(__name__)
@@ -26,173 +31,231 @@ else:
     logger.warning("GEMINI_API_KEY not set. Gemini calls will be skipped.")
 
 
+def _gemini_timeout() -> int:
+    """Read GEMINI_TIMEOUT from current Flask app config when available."""
+    try:
+        from flask import current_app
+        return int(current_app.config.get("GEMINI_TIMEOUT", _DEFAULT_GEMINI_TIMEOUT))
+    except Exception:
+        return _DEFAULT_GEMINI_TIMEOUT
+
+
+def _fallback_questions_from_config(count: int) -> List[str]:
+    """Return the configured hardcoded fallback questions as plain strings.
+
+    Falls back to a generic template list if Flask context is unavailable.
+    """
+    try:
+        from flask import current_app
+        cfg = current_app.config.get("HARDCODED_FALLBACK_QUESTIONS") or []
+        out = [q["question"] if isinstance(q, dict) else str(q) for q in cfg[:count]]
+        if out:
+            return out
+    except Exception:
+        pass
+    return [
+        "Describe a technical project you led from design to deployment.",
+        "Walk me through how you would debug a production outage with no logs.",
+        "Tell me about a time you had to learn a new technology under a tight deadline.",
+        "How would you redesign a system to handle 10x traffic with no downtime?",
+        "What's the most impactful technical improvement you'd make to your latest project?",
+    ][:count]
+
+
+def _get_model():
+    """Configure and return a genai model instance, or None if unavailable."""
+    if not genai or not GEMINI_API_KEY:
+        return None
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        return genai.GenerativeModel(GEMINI_MODEL_NAME)
+    except Exception:
+        logger.exception("Failed to configure Gemini model")
+        return None
+
+
 # -------------------------------------------------------------------
 # FUNCTION: Generate Questions
 # -------------------------------------------------------------------
-def generate_questions(skills: List[str], count: int = 7) -> List[str]:
+def generate_questions(skills: List[str], count: int = 5,
+                       experience_level: str = "intermediate",
+                       previous_topics: Optional[List[str]] = None) -> List[str]:
     """
-    Generate interview questions using Google Gemini 2.0 if available.
-    Falls back to a simple generator if unavailable.
+    Generate distinct interview questions covering different question types.
+
+    Returns a list of plain-string question texts (length == count) so the existing
+    `interview.js` flow that iterates session['interview_questions'] keeps working.
     """
     skills = [s for s in (skills or []) if isinstance(s, str) and s.strip()]
     if not skills:
-        skills = ["experience", "projects", "team"]
+        skills = ["software engineering experience", "projects", "team collaboration"]
 
-    # --- Use Gemini API if available ---
-    if genai and GEMINI_API_KEY:
-        try:
-            genai.configure(api_key=GEMINI_API_KEY)
+    model = _get_model()
+    if model is None:
+        logger.info("Using fallback question generator (no Gemini).")
+        return _fallback_questions_from_config(count)
 
-            model = genai.GenerativeModel("models/gemini-2.0-flash")
+    prompt = f"""You are a senior technical interviewer at a top-tier technology company.
+Generate exactly 5 interview questions for a candidate with the following profile.
 
-            prompt = f"""
-You are an AI Interview Assistant. Generate interview questions that are **strictly based on the candidate's resume skills**.
+Candidate skills: {', '.join(skills)}
+Role level: {experience_level}
+Previously asked topics (do NOT repeat these): {', '.join(previous_topics or []) or 'none'}
 
-Skills extracted from resume: {', '.join(skills)}
+Requirements for each question:
+1. Cover a DIFFERENT skill or dimension than every other question in this set
+2. Vary the question TYPE across the 5 questions using this exact distribution:
+   - Q1: Technical depth (explain a concept or design decision)
+   - Q2: Practical application (a real scenario solvable with their skills)
+   - Q3: Problem-solving under constraints (a challenge with limited resources or time)
+   - Q4: Behavioural + technical hybrid (a past experience showing technical judgment)
+   - Q5: Open-ended innovation (an improvement or future build)
+3. Each question must be answerable in 90-120 seconds of spoken response.
+4. Avoid generic prompts like "Tell me about yourself" or "What are your strengths".
+5. Make each question specific to the listed skills - name the technology or domain.
 
-Requirements:
-- Generate exactly {count} questions.
-- Each question must map to one or more of the listed skills; do NOT use skills outside the list.
-- Mix question types: core concept, applied scenario, debugging/troubleshooting, and one behavioral question tied to a skill.
-- Target beginner-to-intermediate level; avoid advanced theory unless a skill clearly implies it.
-- Ask one clear question at a time, under 2 sentences.
-- Keep the tone professional and encouraging.
-- Do not mention the resume or the skill list explicitly.
-
-Output format:
-- Return only the questions, one per line.
-- No numbering, no bullets, no extra text.
-"""
-
-            logger.info("Gemini: Sending API request...")
-            response = model.generate_content(prompt)
-            logger.info("Gemini: Response received.")
-
-            if response and hasattr(response, "text") and response.text and response.text.strip():
-                text = response.text.strip()
-                questions = [line.strip("0123456789. )-").strip() for line in text.splitlines() if line.strip()]
-                logger.info("Gemini returned %d questions.", len(questions))
-                return questions[:count]
-
-        except Exception:
-            logger.exception("Gemini API call failed; using fallback generator.")
-
-    # --- Fallback question generator ---
-    logger.info("Using fallback question generator.")
-    return [
-        f"Explain your experience with {kw}. Provide an example project and technical details."
-        for kw in (skills * (count // len(skills) + 1))[:count]
-    ]
-
-
-# -------------------------------------------------------------------
-# FUNCTION: Evaluate Answer
-# -------------------------------------------------------------------
-def evaluate_answer(question: str, answer: str) -> dict:
-    """
-    Evaluates the candidate's answer using Gemini API.
-    Returns detailed feedback and scores.
-    """
-    # Truncate inputs to prevent API quota abuse
-    question = (question or '')[:1000]
-    answer = (answer or '')[:5000]
-
-    if not genai or not GEMINI_API_KEY:
-        logger.warning("Gemini API not available; using fallback evaluator")
-        return _fallback_evaluation(question, answer)
+Return ONLY a JSON array - no markdown fences, no commentary:
+[
+  {{"id": 1, "question": "...", "skill_focus": "...", "question_type": "technical_depth"}},
+  {{"id": 2, "question": "...", "skill_focus": "...", "question_type": "practical_application"}},
+  {{"id": 3, "question": "...", "skill_focus": "...", "question_type": "problem_solving"}},
+  {{"id": 4, "question": "...", "skill_focus": "...", "question_type": "behavioural_technical"}},
+  {{"id": 5, "question": "...", "skill_focus": "...", "question_type": "innovation"}}
+]"""
 
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("models/gemini-2.0-flash")
+        raw = call_gemini_with_timeout(model, prompt, timeout=_gemini_timeout())
+        parsed = parse_json_response(raw)
+    except (TimeoutError, ValueError):
+        logger.exception("Gemini question generation failed; using fallback")
+        return _fallback_questions_from_config(count)
+    except Exception:
+        logger.exception("Unexpected error in generate_questions; using fallback")
+        return _fallback_questions_from_config(count)
 
-        prompt = f"""
-You are an expert technical interviewer. Evaluate the candidate's response based only on the content of the answer/transcript.
+    if not isinstance(parsed, list):
+        logger.error("Gemini returned non-array for questions; using fallback")
+        return _fallback_questions_from_config(count)
+
+    questions: List[str] = []
+    for item in parsed:
+        if isinstance(item, dict) and item.get("question"):
+            questions.append(str(item["question"]).strip())
+        elif isinstance(item, str) and item.strip():
+            questions.append(item.strip())
+
+    if not questions:
+        return _fallback_questions_from_config(count)
+
+    # Pad or truncate to caller's requested count
+    if len(questions) < count:
+        pad = _fallback_questions_from_config(count - len(questions))
+        questions.extend(pad)
+    return questions[:count]
+
+
+# -------------------------------------------------------------------
+# FUNCTION: Evaluate Answer (single Gemini call, all 3 dimensions)
+# -------------------------------------------------------------------
+def evaluate_answer(question: str, answer: str, skills: Optional[List[str]] = None) -> dict:
+    """
+    Evaluate a single answer across confidence/technical/communication using one Gemini call.
+    Returns dict with: confidence, technical, communication, summary, feedback,
+    strengths, areas_to_improve, key_strength, key_gap.
+    Falls back to a heuristic evaluator on Gemini failure.
+    """
+    question = (question or '')[:1000]
+    answer = (answer or '')[:5000]
+    skills_str = ", ".join(skills) if skills else "general technical skills"
+
+    model = _get_model()
+    if model is None:
+        logger.warning("Gemini unavailable; using fallback evaluator")
+        return _fallback_evaluation(question, answer)
+
+    prompt = f"""You are a senior technical interviewer. Evaluate the candidate's answer across three independent dimensions.
 
 Question: {question}
-Answer/Transcript: {answer}
+Candidate skills: {skills_str}
+Answer: {answer}
 
-Scoring rubric (0-100 each):
-- Confidence: structure, specificity, and decisiveness; penalize excessive hedging or vagueness.
-- Technical: correctness, depth, and appropriate terminology; penalize inaccuracies or irrelevant content.
-- Communication: clarity, organization, and helpful examples; penalize rambling or disorganized delivery.
+DIMENSION 1 - Confidence (0-100): assertiveness, ownership, specificity.
+  [+] direct "I built/designed/chose"; concrete examples with numbers/names; structured problem->action->result.
+  [-] hedging "I think maybe"; vague generalizations; passive voice without agent; very short answers (<20 words).
 
-Rules:
-- If the answer is empty or nearly empty, give low scores and note missing content.
-- If the answer is off-topic, reduce technical and communication scores.
-- Favor concise, correct, well-structured answers with concrete examples.
+DIMENSION 2 - Technical (0-100): correctness, depth, relevance, practical knowledge.
+  [+] accurate facts and terminology; goes beyond surface ("why" not just "what"); addresses the technical content; shows real-world experience.
+  [-] textbook-only; missing key concepts; factual errors; off-topic.
 
-Return ONLY valid JSON in this exact schema (no extra keys, no commentary):
+DIMENSION 3 - Communication (0-100): grammar, clarity, structure, vocabulary, conciseness.
+  [+] clear topic sentence + supporting details; professional vocabulary; logical transitions; concise.
+  [-] run-ons; frequent grammar errors; excessive filler ("like", "um", "basically"); circular or contradictory.
+
+Score bands (apply per dimension): 90-100 exceptional - 75-89 strong - 55-74 mixed - 35-54 weak - 15-34 poor - 0-14 empty/incoherent.
+
+Edge cases:
+- If answer is <=2 words: all three scores must be <=20 and note "answer too short".
+- If answer is empty: all three scores = 0.
+
+Return ONLY a JSON object - no markdown fences, no commentary:
 {{
-  "confidence": <score 0-100>,
-  "technical": <score 0-100>,
-  "communication": <score 0-100>,
-  "summary": "<1-2 sentence evaluation summary>",
-  "feedback": "<actionable, constructive feedback in 1-2 sentences>",
+  "confidence": <0-100>,
+  "technical": <0-100>,
+  "communication": <0-100>,
+  "summary": "<1-2 sentence overall summary>",
+  "feedback": "<actionable, constructive improvement tip in 1-2 sentences>",
   "strengths": ["<key strength 1>", "<key strength 2>"],
-  "areas_to_improve": ["<area 1>", "<area 2>"]
-}}
-"""
+  "areas_to_improve": ["<area 1>", "<area 2>"],
+  "key_strength": "<the single strongest thing about the answer>",
+  "key_gap": "<the single most important thing missing or wrong>"
+}}"""
 
-        response = model.generate_content(prompt)
-        if hasattr(response, "text") and response.text.strip():
-            import json, re
-            text = response.text.strip()
-            # Try direct JSON parse first
+    try:
+        raw = call_gemini_with_timeout(model, prompt, timeout=_gemini_timeout())
+        evaluation = parse_json_response(raw)
+        if not isinstance(evaluation, dict):
+            raise ValueError("evaluation response was not a JSON object")
+        # Coerce score fields to ints
+        for k in ("confidence", "technical", "communication"):
             try:
-                evaluation = json.loads(text)
-                logger.info("Generated evaluation for answer (direct JSON parse)")
-                return evaluation
-            except Exception:
-                # Try to extract a JSON-like substring between the first { and the last }
-                start = text.find('{')
-                end = text.rfind('}')
-                if start != -1 and end != -1 and end > start:
-                    candidate = text[start:end+1]
-                    try:
-                        evaluation = json.loads(candidate)
-                        logger.info("Generated evaluation for answer (extracted JSON substring)")
-                        return evaluation
-                    except Exception:
-                        logger.debug('Failed to parse extracted JSON candidate')
-
-                # Some models emit single quotes or minor formatting issues; try a loose fallback
-                try:
-                    candidate2 = text.replace("'", '"')
-                    evaluation = json.loads(candidate2)
-                    logger.info("Generated evaluation for answer (replaced single quotes)")
-                    return evaluation
-                except Exception:
-                    logger.debug('Single-quote replacement parsing failed')
-
-                # Last resort: log the raw response for debugging and use fallback
-                logger.error("Failed to parse Gemini evaluation response; raw text:\n%s", text[:2000])
-                return _fallback_evaluation(question, answer)
-
+                evaluation[k] = int(round(float(evaluation.get(k, 0))))
+            except (TypeError, ValueError):
+                evaluation[k] = 0
+            evaluation[k] = max(0, min(100, evaluation[k]))
+        # Ensure list fields exist
+        evaluation.setdefault("strengths", [])
+        evaluation.setdefault("areas_to_improve", [])
+        evaluation.setdefault("summary", "")
+        evaluation.setdefault("feedback", "")
+        evaluation.setdefault("key_strength", "")
+        evaluation.setdefault("key_gap", "")
+        logger.info("Gemini evaluation parsed successfully")
+        return evaluation
+    except (TimeoutError, ValueError):
+        logger.exception("Gemini evaluation failed; using fallback")
+        return _fallback_evaluation(question, answer)
+    except Exception:
+        logger.exception("Unexpected evaluation error; using fallback")
         return _fallback_evaluation(question, answer)
 
-    except Exception as e:
-        logger.exception("Gemini evaluation failed")
-        return _fallback_evaluation(question, answer)
 
 # -------------------------------------------------------------------
 # FUNCTION: Evaluate Full Interview (batch, post-interview)
 # -------------------------------------------------------------------
 def evaluate_full_interview(skills: list, questions: list, answers: list) -> dict:
     """
-    Runs a comprehensive post-interview evaluation using the full transcript.
-    Returns question reviews, strict per-answer scores, skill summaries, and a hire verdict.
-    Falls back gracefully if Gemini is unavailable.
+    Comprehensive post-interview evaluation. Returns the existing rich shape
+    (questions_review, answer_evaluation, skill_summary, overall_evaluation)
+    that result.html consumes. Falls back gracefully when Gemini is unavailable.
     """
-    import json
-
-    # Build transcript block
     pairs = list(zip(questions, answers))
     transcript_block = "\n\n".join(
         f"Q{i+1}: {q}\nA{i+1}: {a}" for i, (q, a) in enumerate(pairs)
     )
     skills_csv = ", ".join(skills) if skills else "general technical skills"
 
-    if not genai or not GEMINI_API_KEY:
+    model = _get_model()
+    if model is None:
         logger.warning("Gemini not available; using fallback full-interview evaluation.")
         return _fallback_full_evaluation(skills, questions, answers)
 
@@ -206,32 +269,32 @@ CANDIDATE ANSWERS:
 {transcript_block}
 
 ---
-PART 1 — QUESTION EVALUATION & IMPROVEMENT
+PART 1 - QUESTION EVALUATION & IMPROVEMENT
 For each question: identify issues (too generic, repetitive, vague) and rewrite it to be more specific, skill-focused, and diverse in style (conceptual / practical / scenario-based / experience-based).
 Assign a difficulty: Basic | Intermediate | Advanced.
 
-PART 2 — STRICT ANSWER EVALUATION
+PART 2 - STRICT ANSWER EVALUATION
 The answers may be a combination of spoken transcripts and manually typed text. Evaluate based on the overall quality, correctness, and completeness of the combined answer.
-Score each answer strictly 0–100:
-  0          = completely wrong, irrelevant, or no answer
-  10–30      = very weak, shallow, mostly incorrect
-  40–60      = partial understanding, lacks depth
-  70–85      = good, mostly correct with minor gaps
-  90–100     = excellent, precise, in-depth, well-articulated
+Score each answer strictly 0-100:
+  0       = completely wrong, irrelevant, or no answer
+  10-30   = very weak, shallow, mostly incorrect
+  40-60   = partial understanding, lacks depth
+  70-85   = good, mostly correct with minor gaps
+  90-100  = excellent, precise, in-depth, well-articulated
 
 CRITICAL:
-- If the answer is vague, generic, or unsatisfying → score MUST be 0
+- If the answer is vague, generic, or unsatisfying -> score MUST be 0
 - No partial credit for non-answers
 - Be strict and evidence-based
 
-PART 3 — SKILL SUMMARY
+PART 3 - SKILL SUMMARY
 Aggregate performance per skill. Label each as Strong | Medium | Weak.
 
-PART 4 — OVERALL EVALUATION
-Compute a final score (0–100) reflecting strict scoring.
-Assign a verdict: Strong Hire | Hire | Weak Hire | Reject
+PART 4 - OVERALL EVALUATION
+Compute a final score (0-100) reflecting strict scoring.
+Assign a verdict: Strong Hire | Hire | Weak Hire | Reject.
 
-Return ONLY valid JSON — no commentary, no markdown fences:
+Return ONLY valid JSON - no commentary, no markdown fences:
 {{
   "questions_review": [
     {{
@@ -267,52 +330,156 @@ Return ONLY valid JSON — no commentary, no markdown fences:
 }}"""
 
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("models/gemini-2.0-flash")
-        response = model.generate_content(prompt)
-
-        if hasattr(response, "text") and response.text.strip():
-            text = response.text.strip()
-            # Strip optional markdown fences
-            if text.startswith("```"):
-                text = text.split("```", 2)[-1] if text.count("```") >= 2 else text
-                text = text.lstrip("json").strip()
-
-            # Try direct parse
-            try:
-                return json.loads(text)
-            except Exception:
-                pass
-
-            # Extract first { ... last }
-            start, end = text.find("{"), text.rfind("}")
-            if start != -1 and end > start:
-                try:
-                    return json.loads(text[start:end + 1])
-                except Exception:
-                    pass
-
-            logger.error("Could not parse full-interview evaluation JSON; using fallback.")
-
+        raw = call_gemini_with_timeout(model, prompt, timeout=_gemini_timeout() * 2)
+        parsed = parse_json_response(raw)
+        if isinstance(parsed, dict):
+            return parsed
+        logger.error("Full-interview evaluation returned non-object; using fallback")
+    except (TimeoutError, ValueError):
+        logger.exception("evaluate_full_interview Gemini call failed")
     except Exception:
-        logger.exception("evaluate_full_interview: Gemini API call failed.")
+        logger.exception("Unexpected full-interview evaluation error")
 
     return _fallback_full_evaluation(skills, questions, answers)
 
 
+# -------------------------------------------------------------------
+# FUNCTION: Compute final_scores aggregation block for interview_runs
+# -------------------------------------------------------------------
+def compute_final_scores(per_question_results: list, full_evaluation: Optional[dict] = None) -> dict:
+    """
+    Aggregate per-question dimension scores into the final_scores block stored
+    on each interview_runs document. Pure-Python (no Gemini call) so it always works.
+
+    Inputs:
+      per_question_results: list of dicts shaped like the session_results entries
+                            (each has .result.{confidence, technical, communication}
+                            and .answer / .questionNumber).
+      full_evaluation: optional dict from evaluate_full_interview() — used to
+                       lift verdict and overall_feedback when available.
+
+    Output keys:
+      overall_score (1-10), confidence_avg, technical_avg, communication_avg,
+      hire_recommendation (strong_yes|yes|maybe|no), overall_feedback,
+      strengths (list), areas_for_improvement (list).
+
+    Floor rules apply on the 0-100 weighted average BEFORE division by 10
+    (the spec's "weighted_avg / 10" then ">=75" comparison was unit-inconsistent).
+    """
+    if not per_question_results:
+        return {
+            "overall_score": 1.0,
+            "confidence_avg": 0,
+            "technical_avg": 0,
+            "communication_avg": 0,
+            "hire_recommendation": "no",
+            "overall_feedback": "No answers were recorded.",
+            "strengths": [],
+            "areas_for_improvement": ["Provide answers to receive an evaluation"],
+        }
+
+    confs, techs, comms = [], [], []
+    capped_indices = []
+    for i, r in enumerate(per_question_results):
+        result = (r or {}).get("result") or {}
+        ans = ((r or {}).get("answer") or "").strip()
+        words = len(ans.split()) if ans else 0
+        try:
+            c = float(result.get("confidence", 0))
+            t = float(result.get("technical", 0))
+            m = float(result.get("communication", 0))
+        except (TypeError, ValueError):
+            c = t = m = 0.0
+        if words == 0:
+            c = t = m = 0.0
+            capped_indices.append(i)
+        elif words <= 2:
+            c = min(c, 20.0)
+            t = min(t, 20.0)
+            m = min(m, 20.0)
+            capped_indices.append(i)
+        confs.append(c)
+        techs.append(t)
+        comms.append(m)
+
+    n = len(per_question_results)
+    confidence_avg = round(sum(confs) / n, 1)
+    technical_avg = round(sum(techs) / n, 1)
+    communication_avg = round(sum(comms) / n, 1)
+
+    weighted_100 = (technical_avg * 0.5
+                    + confidence_avg * 0.25
+                    + communication_avg * 0.25)
+    if weighted_100 >= 75:
+        overall_10 = max(weighted_100 / 10.0, 8.0)
+    elif weighted_100 >= 45:
+        overall_10 = max(weighted_100 / 10.0, 5.0)
+    else:
+        overall_10 = weighted_100 / 10.0
+    overall_10 = round(max(1.0, min(10.0, overall_10)), 1)
+
+    if weighted_100 >= 80:
+        recommendation = "strong_yes"
+    elif weighted_100 >= 65:
+        recommendation = "yes"
+    elif weighted_100 >= 45:
+        recommendation = "maybe"
+    else:
+        recommendation = "no"
+
+    # Pull feedback from full_evaluation when available; build a generic one otherwise
+    overall_feedback = ""
+    if isinstance(full_evaluation, dict):
+        overall_eval = full_evaluation.get("overall_evaluation") or {}
+        overall_feedback = overall_eval.get("summary") or ""
+
+    if not overall_feedback:
+        overall_feedback = (
+            f"Average scores - confidence {confidence_avg:.0f}, technical {technical_avg:.0f}, "
+            f"communication {communication_avg:.0f}. Weighted overall {overall_10:.1f}/10."
+        )
+
+    # Aggregate strengths / improvements from per-question evaluations
+    strengths_set = []
+    improvements_set = []
+    for r in per_question_results:
+        res = (r or {}).get("result") or {}
+        for s in (res.get("strengths") or []):
+            if s and s not in strengths_set:
+                strengths_set.append(s)
+        for s in (res.get("areas_to_improve") or []):
+            if s and s not in improvements_set:
+                improvements_set.append(s)
+
+    return {
+        "overall_score": overall_10,
+        "confidence_avg": confidence_avg,
+        "technical_avg": technical_avg,
+        "communication_avg": communication_avg,
+        "hire_recommendation": recommendation,
+        "overall_feedback": overall_feedback,
+        "strengths": strengths_set[:5],
+        "areas_for_improvement": improvements_set[:5],
+        "capped_questions": capped_indices,
+    }
+
+
+# -------------------------------------------------------------------
+# Fallbacks (offline path when GEMINI_API_KEY is missing or Gemini fails)
+# -------------------------------------------------------------------
 def _fallback_full_evaluation(skills: list, questions: list, answers: list) -> dict:
     """Minimal fallback when Gemini is unavailable for batch evaluation."""
     n = len(questions)
     answer_evaluation = []
     for i, (q, a) in enumerate(zip(questions, answers)):
-        words = len(a.split()) if a else 0
+        words = len((a or "").split()) if a else 0
         score = min(60, max(0, words * 3))
         answer_evaluation.append({
             "question": q,
-            "answer_summary": a[:100] if a else "",
+            "answer_summary": (a or "")[:100],
             "issues": ["Unable to evaluate (AI unavailable)"],
             "score": score,
-            "justification": "Evaluated by word count only (Gemini unavailable)."
+            "justification": "Evaluated by word count only (Gemini unavailable).",
         })
 
     avg_score = int(sum(e["score"] for e in answer_evaluation) / n) if n else 0
@@ -330,7 +497,7 @@ def _fallback_full_evaluation(skills: list, questions: list, answers: list) -> d
                 "original_question": questions[i] if i < len(questions) else "",
                 "issues": ["Evaluation unavailable"],
                 "improved_question": questions[i] if i < len(questions) else "",
-                "difficulty": "Intermediate"
+                "difficulty": "Intermediate",
             }
             for i, s in enumerate(skills[:n])
         ],
@@ -340,31 +507,43 @@ def _fallback_full_evaluation(skills: list, questions: list, answers: list) -> d
                 "skill": s,
                 "average_score": avg_score,
                 "strength": "Medium",
-                "insight": "Detailed evaluation unavailable."
+                "insight": "Detailed evaluation unavailable.",
             }
             for s in skills
         ],
         "overall_evaluation": {
             "final_score": avg_score,
             "verdict": verdict,
-            "summary": "Automated evaluation was unavailable. Scores are approximate."
-        }
+            "summary": "Automated evaluation was unavailable. Scores are approximate.",
+        },
     }
 
 
 def _fallback_evaluation(question: str, answer: str) -> dict:
     """Fallback evaluation when Gemini is unavailable."""
     words = len(answer.split()) if answer else 0
-    confidence = min(100, 40 + min(words // 2, 30))
-    technical = min(100, 30 + (10 if any(tech in answer.lower() for tech in ["example", "project", "implemented"]) else 0) + min(words // 3, 30))
-    communication = min(100, 35 + min(words // 4, 35))
+    if words == 0:
+        confidence = technical = communication = 0
+    elif words <= 2:
+        confidence = technical = communication = 15
+    else:
+        confidence = min(100, 40 + min(words // 2, 30))
+        technical = min(
+            100,
+            30
+            + (10 if any(tech in answer.lower() for tech in ["example", "project", "implemented"]) else 0)
+            + min(words // 3, 30),
+        )
+        communication = min(100, 35 + min(words // 4, 35))
 
     return {
         "confidence": confidence,
         "technical": technical,
         "communication": communication,
-        "summary": "Answer evaluated based on length and keyword usage",
-        "feedback": "Consider providing more specific examples and technical details",
-        "strengths": ["Attempted to answer the question"],
-        "areas_to_improve": ["Add more technical specifics", "Provide concrete examples"]
+        "summary": "Answer evaluated by length and keyword heuristic (Gemini unavailable).",
+        "feedback": "Provide more specific examples and technical details.",
+        "strengths": ["Attempted to answer the question"] if words else [],
+        "areas_to_improve": ["Add more technical specifics", "Provide concrete examples"],
+        "key_strength": "" if not words else "engaged with the question",
+        "key_gap": "Limited evaluation - automated scoring fallback in use.",
     }

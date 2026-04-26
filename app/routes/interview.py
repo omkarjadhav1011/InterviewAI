@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, request, jsonify, current_app, session, url_for
 from flask_login import login_required, current_user
-from ..services.gemini_service import generate_questions, evaluate_answer, evaluate_full_interview
+from ..services.gemini_service import (
+    generate_questions, evaluate_answer, evaluate_full_interview, compute_final_scores,
+)
 from ..services.vapi_service import tts_synthesize, stt_transcribe
 from ..extensions import get_db
 import datetime
@@ -8,19 +10,42 @@ import datetime
 interview_bp = Blueprint('interview', __name__)
 
 
-def combine_answers(transcript: str, typed: str) -> str:
-    """Merge voice transcript and typed input into one answer string."""
-    t = (transcript or "").strip()
-    d = (typed or "").strip()
-    if not t and not d:
+def combine_answers(voice_transcript: str, typed_answer: str) -> str:
+    """Merge voice transcript and typed input into one answer string for evaluation.
+
+    Cases:
+      1. voice-only: return the voice transcript
+      2. typed-only: return the typed answer
+      3. one is a substring of the other: return the longer one (deduplicate)
+      4. high word overlap (>60%): return the longer one
+      5. distinct contributions: return "<typed> <voice>" (typed first - usually more deliberate)
+      6. both empty: return ""
+    """
+    voice = (voice_transcript or "").strip()
+    typed = (typed_answer or "").strip()
+
+    if not voice and not typed:
         return ""
-    if not t:
-        return d
-    if not d:
-        return t
-    if d.lower() in t.lower() or t.lower() in d.lower():
-        return t if len(t) >= len(d) else d
-    return f"{t}\n\n[Typed supplement]: {d}"
+    if not typed:
+        return voice
+    if not voice:
+        return typed
+
+    if voice.lower() in typed.lower():
+        return typed
+    if typed.lower() in voice.lower():
+        return voice
+
+    voice_words = set(voice.lower().split())
+    typed_words = set(typed.lower().split())
+    if not voice_words or not typed_words:
+        return typed if typed else voice
+
+    overlap = len(voice_words & typed_words) / min(len(voice_words), len(typed_words))
+    if overlap > 0.6:
+        return typed if len(typed) >= len(voice) else voice
+
+    return f"{typed} {voice}"
 
 
 @interview_bp.route('/interview')
@@ -142,7 +167,15 @@ def api_evaluate():
 
     # Combine voice transcript and typed input, then evaluate
     combined_answer = combine_answers(answer, typed_answer)
-    result = evaluate_answer(question, combined_answer)
+    skills_for_eval = session.get('skills') or []
+    try:
+        result = evaluate_answer(question, combined_answer, skills=skills_for_eval)
+    except TypeError:
+        # Backward-compat shim if a third-party fork passes only 2 args
+        result = evaluate_answer(question, combined_answer)
+    except TimeoutError:
+        current_app.logger.warning('Gemini evaluation timed out')
+        return jsonify({'status': 'error', 'error': 'AI service timed out, please try again'}), 503
 
     def _compute_overall_score(result_dict, answer_text: str) -> float:
         try:
@@ -192,6 +225,14 @@ def api_evaluate():
     total_questions = len(session.get('interview_questions', []))
     is_last = question_number >= (total_questions - 1) if total_questions > 0 else question_number >= 4
 
+    response_payload = {
+        'status': 'ok',
+        'result': result,
+        'questionNumber': question_number,
+        'is_last_question': bool(is_last),
+        'combined_answer': combined_answer,
+    }
+
     if is_last:
         try:
             db = get_db()
@@ -201,6 +242,7 @@ def api_evaluate():
             all_answers   = [answer_map.get(i, '') for i in range(len(all_questions))]
 
             full_evaluation = evaluate_full_interview(all_skills, all_questions, all_answers)
+            final_scores = compute_final_scores(session_results, full_evaluation)
 
             run_doc = {
                 'user_email':      current_user.email,
@@ -209,18 +251,24 @@ def api_evaluate():
                 'questions':       all_questions,
                 'results':         session_results,
                 'full_evaluation': full_evaluation,
+                'final_scores':    final_scores,
+                'completed':       True,
                 'summary': {
                     'total_questions': len(session_results),
                 }
             }
+            duration = session.get('interview_duration_seconds')
+            if duration is not None:
+                run_doc['duration_seconds'] = duration
             db.interview_runs.insert_one(run_doc)
             session.pop('interview_results', None)
         except Exception:
             current_app.logger.exception('Failed to persist interview run')
 
         result['redirect'] = url_for('interview.results_page')
+        response_payload['redirect'] = result['redirect']
 
-    return jsonify({'status': 'ok', 'result': result, 'questionNumber': question_number})
+    return jsonify(response_payload)
 
 
 @interview_bp.route('/results')

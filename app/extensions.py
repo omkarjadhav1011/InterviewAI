@@ -27,6 +27,7 @@ def init_db(app):
     try:
         _db.users.create_index('email', unique=True)
         _db.interview_runs.create_index([('user_email', 1), ('created_at', -1)])
+        _db.resumes.create_index('user_email', unique=True)
         logger.info('MongoDB indexes ensured on %s', db_name)
     except Exception:
         logger.warning('Could not create MongoDB indexes (non-fatal)')

@@ -15,6 +15,10 @@ logging.basicConfig(
     level=log_level,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
 )
+# Attach the secret-redaction filter to the root logger so every handler benefits
+from .utils.secrets_filter import RedactSecretsFilter
+logging.getLogger().addFilter(RedactSecretsFilter())
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,10 +34,14 @@ def create_app(test_config=None):
         secret = secrets.token_hex(32)
         logger.warning('SECRET_KEY not set; using random key (sessions will not persist across restarts)')
 
-    app.config.from_mapping(
+    # Load shared defaults from BaseConfig (timeouts, fallback questions, etc.)
+    from config import BaseConfig
+    app.config.from_object(BaseConfig)
+
+    app.config.update(
         SECRET_KEY=secret,
         UPLOAD_FOLDER=os.path.join(os.path.dirname(__file__), 'static', 'uploads'),
-        MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 16 MB upload limit
+        MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 16 MB upload limit (Flask-level)
     )
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
@@ -54,11 +62,15 @@ def create_app(test_config=None):
     from .routes.resume import resume_bp
     from .routes.interview import interview_bp
     from .routes.transcription import transcription_bp
+    from .routes.results_api import results_api_bp
+    from .routes.profile_api import profile_api_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(resume_bp)
     app.register_blueprint(interview_bp)
     app.register_blueprint(transcription_bp)
+    app.register_blueprint(results_api_bp)
+    app.register_blueprint(profile_api_bp)
 
     # Health check
     @app.route('/health')

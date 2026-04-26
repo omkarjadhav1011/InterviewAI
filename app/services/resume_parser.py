@@ -1,7 +1,13 @@
+import os
 import re
-import fitz  # PyMuPDF
-from typing import Dict, List
+import logging
+import threading
+from typing import Dict, List, Optional, Tuple
 from collections import Counter
+
+import fitz  # PyMuPDF
+
+logger = logging.getLogger(__name__)
 
 # Regex patterns
 EMAIL_RE = r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}"
@@ -383,12 +389,221 @@ def _extract_skills_with_scores(text: str, sections: Dict[str, str]) -> List[Dic
 # PDF Text Extraction
 # ---------------------------------------------------------------------------
 
+def _extract_pdf_text_inner(file_bytes: bytes, max_pages: int, result: dict) -> None:
+    """Worker that runs in a thread so we can enforce a wall-clock timeout."""
+    try:
+        with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+            if doc.page_count == 0:
+                result["error"] = "PDF has no pages"
+                return
+            pages_to_read = min(doc.page_count, max_pages)
+            parts: List[str] = []
+            for i in range(pages_to_read):
+                try:
+                    page_text = doc[i].get_text("text").strip()
+                except Exception:
+                    logger.exception("Failed to read PDF page %s", i)
+                    continue
+                if page_text:
+                    parts.append(page_text)
+            result["text"] = "\n\n".join(parts)
+            if not result["text"].strip():
+                result["error"] = "PDF appears to be image-only (no extractable text)"
+    except fitz.FileDataError as e:
+        result["error"] = f"Corrupted or invalid PDF: {e}"
+    except Exception as e:
+        result["error"] = f"Unexpected PDF extraction error: {e}"
+
+
+def extract_text_from_pdf_bytes(
+    file_bytes: bytes,
+    max_pages: int = 10,
+    timeout_seconds: int = 20,
+) -> Tuple[str, Optional[str]]:
+    """Extract text from raw PDF bytes with a wall-clock timeout and page cap.
+
+    Returns (text, error). `error` is None on success; populated for empty PDFs,
+    image-only PDFs, corrupted PDFs, or extractor timeouts. The function never raises.
+    """
+    if not file_bytes:
+        return "", "empty file"
+    result: Dict[str, Optional[str]] = {"text": "", "error": None}
+    t = threading.Thread(target=_extract_pdf_text_inner,
+                         args=(file_bytes, max_pages, result), daemon=True)
+    t.start()
+    t.join(timeout=timeout_seconds)
+    if t.is_alive():
+        return "", f"PDF extraction timed out after {timeout_seconds}s"
+    return (result.get("text") or "", result.get("error"))
+
+
 def extract_text_from_pdf(pdf_path: str) -> str:
-    text = ""
-    with fitz.open(pdf_path) as doc:
-        for page in doc:
-            text += page.get_text("text") + "\n"
+    """Backward-compatible path-based wrapper (used by parse_resume / tools/).
+
+    Reads the file into bytes, then delegates to the hardened bytes extractor.
+    Falls back to a quiet empty string on read errors so existing callers don't crash.
+    """
+    try:
+        with open(pdf_path, "rb") as f:
+            data = f.read()
+    except Exception:
+        logger.exception("Failed to read PDF file at %s", pdf_path)
+        return ""
+    text, err = extract_text_from_pdf_bytes(data)
+    if err:
+        logger.warning("PDF extraction warning for %s: %s", pdf_path, err)
     return text
+
+
+# ---------------------------------------------------------------------------
+# Structured profile extraction (Gemini-backed, with skill-scorer fallback)
+# ---------------------------------------------------------------------------
+
+def parse_resume_to_skills_from_text(text: str) -> List[str]:
+    """Run the deterministic skill scorer over already-extracted resume text.
+
+    Mirrors the merge/normalize logic in parse_resume_to_skills() so callers
+    that already have text don't need to re-extract.
+    """
+    if not text or not text.strip():
+        return []
+    sections = extract_sections(text)
+    scored = _extract_skills_with_scores(text, sections)
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    skills = [item["name"] for item in scored]
+    keywords = extract_keywords(text)
+
+    merged: List[str] = []
+    for s in skills + keywords:
+        if not s or not isinstance(s, str):
+            continue
+        normalized = " ".join(w.capitalize() for w in s.strip().split())
+        if normalized and normalized not in merged:
+            merged.append(normalized)
+    return merged[:30]
+
+
+_DEFAULT_PROFILE = {
+    "skills": [],
+    "experience_years": None,
+    "job_titles": [],
+    "education": [],
+    "name": None,
+    "summary": "",
+}
+
+
+def extract_structured_profile(resume_text: str) -> Dict:
+    """Extract a structured candidate profile from resume text via Gemini.
+
+    Returns a dict with keys: skills, experience_years, job_titles, education,
+    name, summary. On Gemini failure (or missing API key), falls back to the
+    deterministic skill scorer for `skills` and a heuristic name extractor.
+    The function never raises.
+    """
+    if not resume_text or not resume_text.strip():
+        return dict(_DEFAULT_PROFILE)
+
+    # Lazy import to avoid coupling resume_parser to gemini_service at module load
+    try:
+        from .gemini_service import _get_model, _gemini_timeout
+        from ..utils.gemini_runtime import call_gemini_with_timeout, parse_json_response
+    except Exception:
+        logger.exception("Could not import Gemini runtime; using fallback profile")
+        return _fallback_profile(resume_text)
+
+    model = _get_model()
+    if model is None:
+        return _fallback_profile(resume_text)
+
+    truncated = resume_text[:8000]
+    prompt = f"""You are a professional resume parser. Extract candidate info from the resume text below.
+
+Return ONLY a valid JSON object - no markdown fences, no commentary:
+{{
+  "skills": ["..."],
+  "experience_years": <integer or null>,
+  "job_titles": ["..."],
+  "education": ["..."],
+  "name": "<candidate name or null>",
+  "summary": "<2-sentence professional summary>"
+}}
+
+Rules:
+- skills: 5-20 specific technical and soft skills, deduplicated, normalized capitalization (e.g. "Python", "REST APIs", "Team Leadership").
+- If a section is missing from the resume, use null or [].
+- Do NOT include markdown code fences in your response.
+
+Resume text:
+{truncated}"""
+
+    try:
+        raw = call_gemini_with_timeout(model, prompt, timeout=_gemini_timeout())
+        parsed = parse_json_response(raw)
+    except Exception:
+        logger.exception("Gemini profile extraction failed; using fallback")
+        return _fallback_profile(resume_text)
+
+    if not isinstance(parsed, dict):
+        return _fallback_profile(resume_text)
+
+    # Normalize fields
+    skills = parsed.get("skills") or []
+    if not isinstance(skills, list):
+        skills = []
+    skills = [str(s).strip() for s in skills if s][:20]
+    if not skills:
+        # Backfill from deterministic scorer if Gemini returned nothing
+        skills = parse_resume_to_skills_from_text(resume_text)
+
+    job_titles = parsed.get("job_titles") or []
+    if not isinstance(job_titles, list):
+        job_titles = []
+    job_titles = [str(t).strip() for t in job_titles if t][:10]
+
+    education = parsed.get("education") or []
+    if not isinstance(education, list):
+        education = []
+    education = [str(e).strip() for e in education if e][:10]
+
+    name = parsed.get("name")
+    if not isinstance(name, str) or not name.strip():
+        name = None
+    else:
+        name = name.strip()
+
+    summary = parsed.get("summary") or ""
+    if not isinstance(summary, str):
+        summary = ""
+
+    exp_years = parsed.get("experience_years")
+    if exp_years is not None:
+        try:
+            exp_years = int(exp_years)
+        except (TypeError, ValueError):
+            exp_years = None
+
+    return {
+        "skills": skills,
+        "experience_years": exp_years,
+        "job_titles": job_titles,
+        "education": education,
+        "name": name,
+        "summary": summary.strip(),
+    }
+
+
+def _fallback_profile(resume_text: str) -> Dict:
+    """Build a profile dict using only deterministic local extractors."""
+    name = extract_name(resume_text)
+    return {
+        "skills": parse_resume_to_skills_from_text(resume_text),
+        "experience_years": None,
+        "job_titles": [],
+        "education": [],
+        "name": name if name and name != "Not found" else None,
+        "summary": "",
+    }
 
 
 # ---------------------------------------------------------------------------

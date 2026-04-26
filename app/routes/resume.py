@@ -1,8 +1,17 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, jsonify, session
+from flask import (
+    Blueprint, render_template, request, redirect, url_for, flash,
+    current_app, jsonify, session,
+)
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
+from datetime import datetime, timezone
 import os
-from ..services.resume_parser import extract_text_from_pdf, extract_keywords, extract_skills, parse_resume_to_skills
+
+from ..services.resume_parser import (
+    extract_text_from_pdf_bytes,
+    extract_structured_profile,
+    parse_resume_to_skills_from_text,
+)
 from ..services.gemini_service import generate_questions
 from ..extensions import get_db
 
@@ -20,73 +29,130 @@ def home():
 @resume_bp.route('/upload', methods=['GET', 'POST'])
 @login_required
 def upload():
-    if request.method == 'POST':
-        users = get_db().users
+    if request.method == 'GET':
+        return render_template('upload.html')
 
-        # Basic checks
-        if 'resume' not in request.files:
-            return jsonify({'status': 'error', 'error': 'no file provided'}), 400
-        file = request.files['resume']
-        if file.filename == '':
-            return jsonify({'status': 'error', 'error': 'empty filename'}), 400
+    db = get_db()
+    users = db.users
 
-        filename = secure_filename(file.filename)
+    # Basic checks
+    if 'resume' not in request.files:
+        return jsonify({'status': 'error', 'error': 'no file provided'}), 400
+    file = request.files['resume']
+    if file.filename == '':
+        return jsonify({'status': 'error', 'error': 'empty filename'}), 400
 
-        # Ensure upload folder exists
-        upload_folder = current_app.config.get('UPLOAD_FOLDER', None)
-        if not upload_folder:
-            upload_folder = os.path.join(current_app.root_path, 'static', 'uploads')
-        if not os.path.isdir(upload_folder):
-            try:
-                os.makedirs(upload_folder, exist_ok=True)
-            except Exception:
-                current_app.logger.exception('Could not create upload folder')
-                return jsonify({'status': 'error', 'error': 'server upload folder error'}), 500
+    filename = secure_filename(file.filename)
+    if not (filename.lower().endswith('.pdf') or file.mimetype == 'application/pdf'):
+        return jsonify({'status': 'error', 'error': 'only PDF files are accepted'}), 400
 
+    # Read into memory once; enforce per-resume size cap
+    try:
+        file_bytes = file.read()
+    except Exception:
+        current_app.logger.exception('Failed to read uploaded file')
+        return jsonify({'status': 'error', 'error': 'could not read uploaded file'}), 500
+
+    max_bytes = current_app.config.get('MAX_RESUME_SIZE_BYTES', 5 * 1024 * 1024)
+    if len(file_bytes) > max_bytes:
+        return jsonify({
+            'status': 'error',
+            'error': f'resume exceeds {max_bytes // (1024 * 1024)}MB limit'
+        }), 413
+
+    # Persist a copy for audit/debug
+    upload_folder = current_app.config.get('UPLOAD_FOLDER') or \
+        os.path.join(current_app.root_path, 'static', 'uploads')
+    try:
+        os.makedirs(upload_folder, exist_ok=True)
         path = os.path.join(upload_folder, filename)
+        with open(path, 'wb') as f:
+            f.write(file_bytes)
+        current_app.logger.info('Resume saved to: %s', path)
+    except Exception:
+        current_app.logger.exception('Could not persist resume to disk (continuing)')
 
-        # Only accept PDFs (basic check)
-        if not (filename.lower().endswith('.pdf') or file.mimetype == 'application/pdf'):
-            return jsonify({'status': 'error', 'error': 'only PDF files are accepted'}), 400
+    # Extract text with hardened bytes-based parser
+    text, extract_err = extract_text_from_pdf_bytes(
+        file_bytes,
+        max_pages=current_app.config.get('MAX_RESUME_PAGES', 10),
+        timeout_seconds=current_app.config.get('PDF_EXTRACTION_TIMEOUT', 20),
+    )
+    if extract_err and not text:
+        current_app.logger.warning('Resume extraction failed: %s', extract_err)
+        return jsonify({'status': 'error', 'error': extract_err}), 400
 
-        try:
-            file.save(path)
-            current_app.logger.info('Resume saved to: %s', path)
-        except Exception:
-            current_app.logger.exception('Failed to save uploaded file')
-            return jsonify({'status': 'error', 'error': 'could not save file'}), 500
+    # Structured profile (Gemini-backed, falls back to deterministic scorer internally)
+    try:
+        profile = extract_structured_profile(text)
+    except Exception:
+        current_app.logger.exception('extract_structured_profile crashed; using fallback')
+        profile = {
+            'skills': parse_resume_to_skills_from_text(text),
+            'experience_years': None,
+            'job_titles': [],
+            'education': [],
+            'name': None,
+            'summary': '',
+        }
 
-        # Parse the saved PDF and extract data
-        try:
-            skills = parse_resume_to_skills(path)
-            current_app.logger.info('Extracted %d skills from resume', len(skills))
+    skills = profile.get('skills') or []
+    if not skills:
+        skills = parse_resume_to_skills_from_text(text)
+        profile['skills'] = skills
 
-            try:
-                users.update_one(
-                    {'email': current_user.email},
-                    {'$set': {'skills': skills}}
-                )
-                session['skills'] = skills
-                current_app.logger.info('Resume skills stored in session and DB')
-            except Exception:
-                current_app.logger.exception('Failed to update user skills in DB')
+    current_app.logger.info('Extracted %d skills from resume', len(skills))
 
-            # Generate initial questions
-            questions = []
-            try:
-                questions = generate_questions(skills, count=5)
-                session['interview_questions'] = questions
-                current_app.logger.info('Generated %d questions from skills', len(questions))
-            except Exception:
-                current_app.logger.exception('Failed to generate questions')
+    # Persist skills to users (legacy field, still read by /profile and /get_questions)
+    try:
+        users.update_one(
+            {'email': current_user.email},
+            {'$set': {'skills': skills}},
+        )
+        session['skills'] = skills
+    except Exception:
+        current_app.logger.exception('Failed to update user skills in DB')
 
-            return jsonify({
-                'status': 'ok',
+    # Upsert into resumes collection (one doc per user)
+    try:
+        db.resumes.update_one(
+            {'user_email': current_user.email},
+            {'$set': {
+                'user_email': current_user.email,
+                'filename': filename,
+                'parsed_at': datetime.now(timezone.utc),
                 'skills': skills,
-                'questions': questions,
-                'next': url_for('interview.interview_page')
-            })
-        except Exception:
-            current_app.logger.exception('Error parsing resume')
-            return jsonify({'status': 'error', 'error': 'failed to parse resume'}), 500
-    return render_template('upload.html')
+                'name': profile.get('name'),
+                'summary': profile.get('summary', ''),
+                'experience_years': profile.get('experience_years'),
+                'job_titles': profile.get('job_titles', []),
+                'education': profile.get('education', []),
+            }},
+            upsert=True,
+        )
+    except Exception:
+        current_app.logger.exception('Failed to upsert resume document (non-fatal)')
+
+    # Generate questions synchronously, with config-driven fallback on failure
+    try:
+        questions = generate_questions(skills, count=5) or []
+    except Exception:
+        current_app.logger.exception('Question generation crashed; using config fallback')
+        questions = []
+    if not questions:
+        cfg_fallback = current_app.config.get('HARDCODED_FALLBACK_QUESTIONS') or []
+        questions = [q['question'] if isinstance(q, dict) else str(q) for q in cfg_fallback[:5]]
+    session['interview_questions'] = questions
+    session['interview_results'] = []
+
+    return jsonify({
+        'status': 'ok',
+        'skills': skills,
+        'questions': questions,
+        'next': url_for('interview.interview_page'),
+        # Additive fields — interview.js / resume.js ignore unknown keys
+        'name': profile.get('name'),
+        'summary': profile.get('summary', ''),
+        'experience_years': profile.get('experience_years'),
+        'job_titles': profile.get('job_titles', []),
+    })
