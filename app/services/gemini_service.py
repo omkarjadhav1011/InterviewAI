@@ -1,5 +1,7 @@
 import os
-from typing import List, Optional
+import random
+import time
+from typing import Any, Dict, List, Optional
 import logging
 
 # Optional Google Generative AI client import
@@ -40,29 +42,34 @@ def _gemini_timeout() -> int:
         return _DEFAULT_GEMINI_TIMEOUT
 
 
-# Skill-driven question templates, one per question type. Each template MUST contain
-# `{skill}` exactly once; the fallback generator substitutes the candidate's actual
-# skills (cycled if fewer skills than question types).
+# Skill-driven question templates, one per question type. Each template uses
+# `{skill}` and may use `{seniority}`, `{title}`, or `{years}` for personalization.
+# The fallback generator substitutes the candidate's actual profile (cycled if needed).
 _QUESTION_TEMPLATES_BY_TYPE = {
     "technical_depth": [
-        "Walk me through how you would design a production-ready service using {skill}, including the key trade-offs you'd weigh.",
-        "Explain the {skill} concept you find most often misunderstood by engineers, and why it matters in production.",
+        "In simple words, what is {skill} and what is it commonly used for?",
+        "Can you explain one important concept in {skill} that you've learned, in your own words?",
+        "What do you like about {skill}, and when would you choose to use it?",
     ],
     "practical_application": [
-        "Describe a concrete project where you applied {skill} to solve a real problem. What was the outcome and what did you measure?",
-        "How have you used {skill} in a production setting, and what specific challenge did it address?",
+        "Tell me about a small project or assignment where you used {skill}. What did you build?",
+        "How have you used {skill} in a project, even a learning project? Walk me through what you did.",
+        "Describe one feature you built with {skill}. Keep it simple — just the basics of what you did.",
     ],
     "problem_solving": [
-        "A service built around {skill} is failing intermittently under load and the logs are unhelpful. Walk me through how you diagnose and resolve it.",
-        "You've been asked to migrate a critical component that relies on {skill} with zero downtime. What's your plan and where do you see the biggest risks?",
+        "Have you ever run into a bug or error while working with {skill}? How did you figure out the fix?",
+        "If a beginner asked you for one tip when starting with {skill}, what would you tell them?",
+        "What's one common mistake people make when using {skill}, and how can it be avoided?",
     ],
     "behavioural_technical": [
-        "Tell me about a time you made a difficult technical decision involving {skill}. What was the trade-off and what would you do differently today?",
-        "Describe a project that used {skill} where things went wrong. What did you learn, and how did it change how you work?",
+        "Tell me about something new you learned recently about {skill}. How did you learn it?",
+        "Describe a time you helped a teammate or classmate with {skill}. What did you explain?",
+        "What's been the most fun thing about working with {skill} so far?",
     ],
     "innovation": [
-        "If you could redesign one common pattern in how {skill} is used today, what would it be and why?",
-        "What's the most impactful improvement you'd make to a {skill}-based system you've worked on if you had one more month?",
+        "If you had time to explore {skill} more, what would you want to learn next?",
+        "What's one small improvement you'd like to try in a project that uses {skill}?",
+        "What's one thing about {skill} you'd like to understand better?",
     ],
 }
 
@@ -76,27 +83,79 @@ _QUESTION_TYPE_ORDER = (
 )
 
 
-def _generate_skill_based_questions(skills: List[str], count: int = 5) -> List[str]:
+def _seniority_from_years(experience_years: Optional[int]) -> str:
+    """Map years of experience to a seniority bucket used for prompt tailoring."""
+    if experience_years is None:
+        return "intermediate"
+    if experience_years < 2:
+        return "junior"
+    if experience_years < 5:
+        return "mid-level"
+    if experience_years < 10:
+        return "senior"
+    return "staff"
+
+
+def _normalize_profile(profile: Optional[Dict[str, Any]],
+                      skills: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Merge an explicit profile dict with a fallback skill list into a canonical form."""
+    profile = profile or {}
+    out_skills = [s for s in (profile.get("skills") or skills or []) if isinstance(s, str) and s.strip()]
+    titles = [t for t in (profile.get("job_titles") or []) if isinstance(t, str) and t.strip()]
+    education = [e for e in (profile.get("education") or []) if isinstance(e, str) and e.strip()]
+    years = profile.get("experience_years")
+    try:
+        years = int(years) if years is not None else None
+    except (TypeError, ValueError):
+        years = None
+    summary = profile.get("summary") or ""
+    name = profile.get("name") or ""
+    return {
+        "skills": out_skills,
+        "job_titles": titles,
+        "education": education,
+        "experience_years": years,
+        "seniority": _seniority_from_years(years),
+        "summary": summary.strip() if isinstance(summary, str) else "",
+        "name": name.strip() if isinstance(name, str) else "",
+    }
+
+
+def _generate_skill_based_questions(
+    skills: List[str],
+    count: int = 5,
+    profile: Optional[Dict[str, Any]] = None,
+    seed: Optional[int] = None,
+) -> List[str]:
     """Deterministically generate `count` distinct, skill-grounded questions.
 
-    Uses the candidate's actual skills (cycled if fewer than `count`) and varies
-    the question type across the slot order. Each question references at least
-    one specific skill — never a generic placeholder.
+    Personalizes templates using the candidate's profile (titles, seniority,
+    years) when available, varies the question type across the slot order, and
+    uses a per-session seed to vary wording across reruns of the same profile.
     """
-    skills = [s for s in (skills or []) if isinstance(s, str) and s.strip()]
-    if not skills:
-        # Final-tier fallback: still skill-shaped, just generic-domain
-        skills = ["your strongest technical area"]
+    norm = _normalize_profile(profile, skills)
+    skills = norm["skills"] or ["your strongest technical area"]
+    title = (norm["job_titles"][0] if norm["job_titles"] else "software engineer")
+    seniority = norm["seniority"]
+    years = norm["experience_years"] if norm["experience_years"] is not None else 3
 
-    # Per-template-list rotating index so different runs over the same skill set
-    # don't produce identical wording. We use len(skill_index) as a cheap salt.
+    rng = random.Random(seed if seed is not None else int(time.time()))
+
     questions: List[str] = []
     for i in range(count):
         qtype = _QUESTION_TYPE_ORDER[i % len(_QUESTION_TYPE_ORDER)]
         templates = _QUESTION_TEMPLATES_BY_TYPE[qtype]
         skill = skills[i % len(skills)]
-        template = templates[i % len(templates)]
-        questions.append(template.format(skill=skill))
+        template = rng.choice(templates)
+        text = template.replace("{skill}", skill)
+        # Keep the formatter forgiving in case any template still references
+        # title/seniority/years (templates are intentionally beginner-friendly
+        # now and ignore those, but stay defensive).
+        try:
+            text = text.format(title=title, seniority=seniority, years=years)
+        except (KeyError, IndexError, ValueError):
+            pass
+        questions.append(text)
     return questions
 
 
@@ -112,53 +171,125 @@ def _get_model():
         return None
 
 
+def _format_profile_block(profile: Dict[str, Any]) -> str:
+    """Render a normalized profile dict as a human-readable prompt block."""
+    parts: List[str] = []
+    if profile.get("name"):
+        parts.append(f"Name: {profile['name']}")
+    if profile.get("job_titles"):
+        parts.append("Recent job titles: " + ", ".join(profile["job_titles"][:5]))
+    years = profile.get("experience_years")
+    seniority = profile.get("seniority", "intermediate")
+    if years is not None:
+        parts.append(f"Total experience: {years} years ({seniority})")
+    else:
+        parts.append(f"Inferred seniority: {seniority}")
+    if profile.get("education"):
+        parts.append("Education: " + "; ".join(profile["education"][:3]))
+    if profile.get("skills"):
+        parts.append("Skills (in order of resume emphasis): " + ", ".join(profile["skills"][:15]))
+    if profile.get("summary"):
+        parts.append("Resume summary: " + profile["summary"][:400])
+    return "\n".join(parts) if parts else "No profile data available."
+
+
+def _format_history_block(previous_qa: Optional[List[Dict[str, str]]]) -> str:
+    """Render prior Q&A so the LLM can build follow-ups instead of repeating."""
+    if not previous_qa:
+        return "(no questions asked yet — this is the first question of the interview)"
+    out: List[str] = []
+    for i, item in enumerate(previous_qa, 1):
+        q = (item.get("question") or "").strip()
+        a = (item.get("answer") or "").strip()
+        if not q:
+            continue
+        a_excerpt = (a[:300] + "…") if len(a) > 300 else a
+        out.append(f"Q{i}: {q}\nA{i}: {a_excerpt or '(no answer captured)'}")
+    return "\n\n".join(out) if out else "(none)"
+
+
 # -------------------------------------------------------------------
 # FUNCTION: Generate Questions
 # -------------------------------------------------------------------
 def generate_questions(skills: List[str], count: int = 5,
                        experience_level: str = "intermediate",
-                       previous_topics: Optional[List[str]] = None) -> List[str]:
+                       previous_topics: Optional[List[str]] = None,
+                       profile: Optional[Dict[str, Any]] = None,
+                       previous_qa: Optional[List[Dict[str, str]]] = None,
+                       session_seed: Optional[int] = None) -> List[str]:
     """
     Generate distinct interview questions covering different question types.
+
+    Profile-aware: when a `profile` dict is supplied (skills, experience_years,
+    job_titles, education, summary, name), the LLM tailors each question to the
+    candidate's seniority, role, and combination of skills — not just one skill.
+    `previous_qa` lets the model build on or contrast with earlier answers.
+    `session_seed` salts the prompt so reruns over the same profile produce
+    different wording and angles.
 
     Returns a list of plain-string question texts (length == count) so the existing
     `interview.js` flow that iterates session['interview_questions'] keeps working.
     """
-    skills = [s for s in (skills or []) if isinstance(s, str) and s.strip()]
-    if not skills:
-        skills = ["software engineering experience", "projects", "team collaboration"]
+    norm = _normalize_profile(profile, skills)
+    if not norm["skills"]:
+        norm["skills"] = ["software engineering experience", "projects", "team collaboration"]
+    if session_seed is None:
+        session_seed = int(time.time() * 1000) & 0xFFFF
 
     model = _get_model()
     if model is None:
         logger.info("Using fallback question generator (no Gemini).")
-        return _generate_skill_based_questions(skills, count)
+        return _generate_skill_based_questions(norm["skills"], count, profile=norm, seed=session_seed)
 
-    prompt = f"""You are a senior technical interviewer at a top-tier technology company.
-Generate exactly 5 interview questions for a candidate with the following profile.
+    profile_block = _format_profile_block(norm)
+    history_block = _format_history_block(previous_qa)
+    seniority = norm["seniority"]
+    avoid_topics = ", ".join(previous_topics or []) or "none"
 
-Candidate skills: {', '.join(skills)}
-Role level: {experience_level}
-Previously asked topics (do NOT repeat these): {', '.join(previous_topics or []) or 'none'}
+    prompt = f"""You are a friendly interviewer running an introductory, BEGINNER-FRIENDLY interview.
+Generate exactly {count} interview questions tailored to the candidate below.
 
-Requirements for each question:
-1. Cover a DIFFERENT skill or dimension than every other question in this set
-2. Vary the question TYPE across the 5 questions using this exact distribution:
-   - Q1: Technical depth (explain a concept or design decision)
-   - Q2: Practical application (a real scenario solvable with their skills)
-   - Q3: Problem-solving under constraints (a challenge with limited resources or time)
-   - Q4: Behavioural + technical hybrid (a past experience showing technical judgment)
-   - Q5: Open-ended innovation (an improvement or future build)
-3. Each question must be answerable in 90-120 seconds of spoken response.
-4. Avoid generic prompts like "Tell me about yourself" or "What are your strengths".
-5. Make each question specific to the listed skills - name the technology or domain.
+CANDIDATE PROFILE
+-----------------
+{profile_block}
 
-Return ONLY a JSON array - no markdown fences, no commentary:
+PRIOR INTERVIEW HISTORY
+-----------------------
+{history_block}
+
+TOPICS TO AVOID REPEATING
+-------------------------
+{avoid_topics}
+
+DIVERSITY SALT (use to vary wording / angle across reruns): {session_seed}
+
+DIFFICULTY — this is the most important rule:
+- All questions MUST be EASY enough that a complete beginner with only basic familiarity could answer.
+- NO advanced topics: no system design, no production trade-offs, no scaling, no architecture, no incident response, no zero-downtime migration, no performance tuning, no concurrency edge cases.
+- NO jargon-heavy phrasing. Prefer plain English, short sentences, and conversational tone.
+- It's fine to reference the candidate's specific skills and one or two profile details (skill name, project, or topic), but DO NOT calibrate to "senior" or "staff" depth even if the resume suggests seniority — keep it gentle and approachable for everyone.
+- A good rule of thumb: if a first-year student or self-taught beginner couldn't reasonably answer in 1-2 minutes, the question is too hard.
+
+PERSONALIZATION:
+- Reference at least one specific named skill from the candidate's profile in each question (so it doesn't feel generic), but keep the depth simple.
+- Where prior Q&A exists, each new question should naturally follow up on something the candidate already said — but stay easy.
+
+VARIETY across the {count} questions (truncate if count<5):
+   - Q1: Concept check — "in simple words, what is X" or "what does X do".
+   - Q2: Practical use — "tell me about a small project where you used X".
+   - Q3: Light problem-solving — "have you run into an error with X, how did you fix it" or "one tip for a beginner with X".
+   - Q4: Reflective/behavioural — "what did you learn about X" or "how did you help someone with X".
+   - Q5: Curiosity — "what would you like to learn next about X".
+
+OTHER RULES:
+- Each question must be answerable in 60-120 seconds of spoken response.
+- Do NOT use these forbidden openers: "Tell me about yourself", "What are your strengths", "Walk me through your resume".
+- Do NOT ask about salary, location, availability, or non-technical biographical info.
+
+Return ONLY a JSON array — no markdown fences, no commentary:
 [
-  {{"id": 1, "question": "...", "skill_focus": "...", "question_type": "technical_depth"}},
-  {{"id": 2, "question": "...", "skill_focus": "...", "question_type": "practical_application"}},
-  {{"id": 3, "question": "...", "skill_focus": "...", "question_type": "problem_solving"}},
-  {{"id": 4, "question": "...", "skill_focus": "...", "question_type": "behavioural_technical"}},
-  {{"id": 5, "question": "...", "skill_focus": "...", "question_type": "innovation"}}
+  {{"id": 1, "question": "...", "skill_focus": "...", "question_type": "technical_depth", "rationale": "<why this question fits this candidate at a beginner level>"}},
+  ...
 ]"""
 
     try:
@@ -166,14 +297,14 @@ Return ONLY a JSON array - no markdown fences, no commentary:
         parsed = parse_json_response(raw)
     except (TimeoutError, ValueError):
         logger.exception("Gemini question generation failed; using fallback")
-        return _generate_skill_based_questions(skills, count)
+        return _generate_skill_based_questions(norm["skills"], count, profile=norm, seed=session_seed)
     except Exception:
         logger.exception("Unexpected error in generate_questions; using fallback")
-        return _generate_skill_based_questions(skills, count)
+        return _generate_skill_based_questions(norm["skills"], count, profile=norm, seed=session_seed)
 
     if not isinstance(parsed, list):
         logger.error("Gemini returned non-array for questions; using fallback")
-        return _generate_skill_based_questions(skills, count)
+        return _generate_skill_based_questions(norm["skills"], count, profile=norm, seed=session_seed)
 
     questions: List[str] = []
     for item in parsed:
@@ -183,13 +314,100 @@ Return ONLY a JSON array - no markdown fences, no commentary:
             questions.append(item.strip())
 
     if not questions:
-        return _generate_skill_based_questions(skills, count)
+        return _generate_skill_based_questions(norm["skills"], count, profile=norm, seed=session_seed)
 
-    # Pad or truncate to caller's requested count, using skill-based templates
+    # Pad or truncate to caller's requested count, using profile-aware fallback templates
     if len(questions) < count:
-        pad = _generate_skill_based_questions(skills, count - len(questions))
+        pad = _generate_skill_based_questions(
+            norm["skills"], count - len(questions), profile=norm, seed=session_seed,
+        )
         questions.extend(pad)
     return questions[:count]
+
+
+# -------------------------------------------------------------------
+# FUNCTION: Regenerate Next Question (adaptive, mid-interview)
+# -------------------------------------------------------------------
+def regenerate_next_question(
+    profile: Optional[Dict[str, Any]],
+    skills: List[str],
+    previous_qa: List[Dict[str, str]],
+    next_index: int,
+    total_questions: int,
+    fallback_question: Optional[str] = None,
+) -> str:
+    """Produce a single follow-up question that builds on what the candidate just said.
+
+    Used between turns of the interview: after answer N is evaluated, this
+    regenerates question N+1 so it adapts to the candidate's prior answer
+    instead of being a static, pre-generated string. Falls back to the
+    pre-generated question (or a profile-aware template) if Gemini is unavailable.
+    """
+    norm = _normalize_profile(profile, skills)
+    seed = int(time.time() * 1000) & 0xFFFF
+
+    if not norm["skills"]:
+        return fallback_question or "Tell me about a challenging technical problem you've solved recently."
+
+    model = _get_model()
+    if model is None:
+        # Fall through to a profile-aware template at the right slot
+        return fallback_question or _generate_skill_based_questions(
+            norm["skills"], total_questions, profile=norm, seed=seed,
+        )[min(next_index, total_questions - 1)]
+
+    # Map the slot index to a question type so the arc still varies
+    slot_type = _QUESTION_TYPE_ORDER[next_index % len(_QUESTION_TYPE_ORDER)]
+    profile_block = _format_profile_block(norm)
+    history_block = _format_history_block(previous_qa)
+
+    prompt = f"""You are a friendly interviewer continuing a BEGINNER-FRIENDLY interview.
+Generate exactly ONE follow-up question (question #{next_index + 1} of {total_questions}).
+
+CANDIDATE PROFILE
+-----------------
+{profile_block}
+
+INTERVIEW SO FAR
+----------------
+{history_block}
+
+DIFFICULTY — most important rule:
+- The question MUST be EASY enough that a complete beginner could answer. Plain English, short, conversational.
+- NO advanced topics (no system design, scaling, architecture, production trade-offs, incident response, performance tuning, concurrency edge cases, zero-downtime migrations).
+- Even if the candidate sounds experienced, keep this question gentle and approachable.
+- A first-year student or self-taught beginner should be able to answer in 1-2 minutes.
+
+REQUIREMENTS for question #{next_index + 1}:
+- The question's style should be: {slot_type.replace('_', ' ')}, but rendered in a beginner-friendly form (e.g. "in simple words, what is X" instead of "design a production-ready X service").
+- It should build on something the candidate just said in the most recent answer (a topic, a tool they mentioned, a small detail). Do not repeat any topic already covered above.
+- Reference at least one specific named skill from the candidate's profile so it doesn't feel generic.
+- Answerable in 60-120 seconds of spoken response.
+- Do NOT use generic openers like "Tell me about yourself" or "What's your favourite technology".
+
+Return ONLY a JSON object — no markdown fences, no commentary:
+{{"question": "...", "skill_focus": "...", "rationale": "<why this beginner-friendly question follows naturally from what they said>"}}"""
+
+    try:
+        raw = call_gemini_with_timeout(model, prompt, timeout=_gemini_timeout())
+        parsed = parse_json_response(raw)
+    except (TimeoutError, ValueError):
+        logger.exception("Gemini next-question regen failed; using fallback")
+        parsed = None
+    except Exception:
+        logger.exception("Unexpected next-question regen error; using fallback")
+        parsed = None
+
+    if isinstance(parsed, dict) and isinstance(parsed.get("question"), str):
+        text = parsed["question"].strip()
+        if text:
+            return text
+
+    if fallback_question:
+        return fallback_question
+    return _generate_skill_based_questions(
+        norm["skills"], total_questions, profile=norm, seed=seed,
+    )[min(next_index, total_questions - 1)]
 
 
 # -------------------------------------------------------------------

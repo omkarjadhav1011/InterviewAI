@@ -113,6 +113,17 @@ def upload():
     except Exception:
         current_app.logger.exception('Failed to update user skills in DB')
 
+    # Store the full structured profile in the session so question generation
+    # can personalize on years/titles/education/summary, not just skills.
+    session['candidate_profile'] = {
+        'skills': skills,
+        'name': profile.get('name'),
+        'summary': profile.get('summary', ''),
+        'experience_years': profile.get('experience_years'),
+        'job_titles': profile.get('job_titles', []),
+        'education': profile.get('education', []),
+    }
+
     # Upsert into resumes collection (one doc per user)
     try:
         db.resumes.update_one(
@@ -133,15 +144,24 @@ def upload():
     except Exception:
         current_app.logger.exception('Failed to upsert resume document (non-fatal)')
 
-    # Generate questions synchronously. generate_questions() always returns
-    # skill-based output (Gemini when available, deterministic skill-template
-    # fallback otherwise) so we never substitute static text for the user's skills.
+    # Generate questions synchronously, passing the full profile so each
+    # question is calibrated to the candidate's seniority, role, and skill mix
+    # rather than being string-substituted from a single skill.
+    import time as _time
+    session_seed = int(_time.time() * 1000) & 0xFFFF
+    session['interview_seed'] = session_seed
     try:
-        questions = generate_questions(skills, count=5)
+        questions = generate_questions(
+            skills, count=5,
+            profile=session['candidate_profile'],
+            session_seed=session_seed,
+        )
     except Exception:
-        current_app.logger.exception('Question generation crashed; using skill-template fallback')
+        current_app.logger.exception('Question generation crashed; using profile-aware fallback')
         from ..services.gemini_service import _generate_skill_based_questions
-        questions = _generate_skill_based_questions(skills, count=5)
+        questions = _generate_skill_based_questions(
+            skills, count=5, profile=session['candidate_profile'], seed=session_seed,
+        )
     session['interview_questions'] = questions
     session['interview_results'] = []
 

@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, jsonify, current_app, ses
 from flask_login import login_required, current_user
 from ..services.gemini_service import (
     generate_questions, evaluate_answer, evaluate_full_interview, compute_final_scores,
+    regenerate_next_question,
 )
 from ..services.vapi_service import tts_synthesize, stt_transcribe
 from ..extensions import get_db
@@ -56,14 +57,33 @@ def interview_page():
     return render_template('interview.html', user=user_doc)
 
 
+def _get_candidate_profile():
+    """Pull the structured profile from session, falling back to DB lookup."""
+    profile = session.get('candidate_profile')
+    if profile:
+        return profile
+    db = get_db()
+    resume_doc = db.resumes.find_one({'user_email': current_user.email}) or {}
+    user_doc = db.users.find_one({'email': current_user.email}) or {}
+    skills = resume_doc.get('skills') or user_doc.get('skills') or []
+    return {
+        'skills': skills,
+        'name': resume_doc.get('name'),
+        'summary': resume_doc.get('summary', ''),
+        'experience_years': resume_doc.get('experience_years'),
+        'job_titles': resume_doc.get('job_titles', []),
+        'education': resume_doc.get('education', []),
+    }
+
+
 @interview_bp.route('/api/get_question')
 @login_required
 def api_get_question():
     try:
-        users = get_db().users
-        user_doc = users.find_one({'email': current_user.email})
-        skills = user_doc.get('skills', []) if user_doc else []
-        q = generate_questions(skills, count=7)
+        profile = _get_candidate_profile()
+        skills = profile.get('skills', []) or []
+        seed = session.get('interview_seed')
+        q = generate_questions(skills, count=7, profile=profile, session_seed=seed)
         return jsonify({'status': 'ok', 'questions': q})
     except Exception:
         current_app.logger.exception('Failed to generate questions')
@@ -94,7 +114,11 @@ def get_questions():
 
     if skills and not questions:
         try:
-            questions = generate_questions(skills, count=5)
+            profile = _get_candidate_profile()
+            seed = session.get('interview_seed')
+            questions = generate_questions(
+                skills, count=5, profile=profile, session_seed=seed,
+            )
             session['interview_questions'] = questions
             current_app.logger.info('Generated %d new questions', len(questions))
         except Exception:
@@ -222,8 +246,41 @@ def api_evaluate():
     session['interview_results'] = session_results[-max_results:]
 
     # Determine if this is the last question
-    total_questions = len(session.get('interview_questions', []))
+    interview_questions = session.get('interview_questions', [])
+    total_questions = len(interview_questions)
     is_last = question_number >= (total_questions - 1) if total_questions > 0 else question_number >= 4
+
+    # Adaptive regeneration: rewrite the NEXT question based on the conversation
+    # so far so it builds on what the candidate just said. Skip on the last
+    # question; skip silently on any failure (the pre-generated question stands).
+    if not is_last and total_questions > 0:
+        try:
+            next_index = question_number + 1
+            if next_index < total_questions:
+                history = []
+                for r in session_results:
+                    history.append({
+                        'question': r.get('question', ''),
+                        'answer': r.get('answer', ''),
+                    })
+                profile = _get_candidate_profile()
+                fallback = interview_questions[next_index]
+                new_q = regenerate_next_question(
+                    profile=profile,
+                    skills=profile.get('skills', []) or [],
+                    previous_qa=history,
+                    next_index=next_index,
+                    total_questions=total_questions,
+                    fallback_question=fallback,
+                )
+                if new_q and new_q != fallback:
+                    interview_questions[next_index] = new_q
+                    session['interview_questions'] = interview_questions
+                    current_app.logger.info(
+                        'Regenerated adaptive Q%d based on prior answers', next_index + 1,
+                    )
+        except Exception:
+            current_app.logger.exception('Adaptive next-question regen failed (non-fatal)')
 
     response_payload = {
         'status': 'ok',
