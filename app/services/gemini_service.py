@@ -13,8 +13,18 @@ except Exception:
 from ..utils.gemini_runtime import call_gemini_with_timeout, parse_json_response
 
 # --- Configuration ---
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
-GEMINI_MODEL_NAME = "models/gemini-2.0-flash"
+# Model name can be overridden via env. Default is the most-cost-efficient model
+# that has separate free-tier quota from the older 2.0-flash. When a model is
+# unavailable (404 / 403 leaked-key / 429 quota) we fall through the candidates
+# in `_MODEL_CANDIDATES` until one responds.
+_DEFAULT_MODEL = "models/gemini-2.5-flash"
+_MODEL_CANDIDATES = (
+    os.getenv("GEMINI_MODEL_NAME") or _DEFAULT_MODEL,
+    "models/gemini-2.5-flash",
+    "models/gemini-2.5-flash-lite",
+    "models/gemini-2.0-flash",
+    "models/gemini-2.0-flash-lite",
+)
 
 # Timeout default if Flask app context is unavailable (e.g. tools/ scripts)
 _DEFAULT_GEMINI_TIMEOUT = 15
@@ -22,15 +32,16 @@ _DEFAULT_GEMINI_TIMEOUT = 15
 # --- Logging setup ---
 logger = logging.getLogger(__name__)
 
+
+def _gemini_api_key() -> str:
+    """Read the API key fresh on each call so dotenv reloads / test fixtures work."""
+    return (os.getenv("GEMINI_API_KEY") or "").strip()
+
+
 if genai is None:
     logger.warning("Google Generative AI client not installed. Using fallback.")
 else:
     logger.info("Google Generative AI client is available.")
-
-if GEMINI_API_KEY:
-    logger.info("GEMINI_API_KEY found in environment.")
-else:
-    logger.warning("GEMINI_API_KEY not set. Gemini calls will be skipped.")
 
 
 def _gemini_timeout() -> int:
@@ -159,16 +170,97 @@ def _generate_skill_based_questions(
     return questions
 
 
+_model = None
+_model_name_used = None
+# Track candidates that failed permanently in this process so we don't retry them
+# on every request (e.g. 403 leaked-key, 404 model-not-found).
+_model_blacklist: set = set()
+
+
+def _is_permanent_error(exc: Exception) -> bool:
+    """403 (leaked / forbidden) and 404 (model not found) are not retry-worthy."""
+    name = type(exc).__name__
+    msg = str(exc)
+    if name in ("PermissionDenied", "NotFound", "Unauthenticated"):
+        return True
+    return "403" in msg or "404" in msg or "leaked" in msg.lower()
+
+
 def _get_model():
-    """Configure and return a genai model instance, or None if unavailable."""
-    if not genai or not GEMINI_API_KEY:
+    """Configure and return a genai model instance, or None if unavailable.
+
+    Tries each model in `_MODEL_CANDIDATES` until one is reachable.  Caches the
+    first working model for the rest of the process.  On transient failure
+    (e.g. 429 quota) the next request will try again from the top of the list.
+    """
+    global _model, _model_name_used
+
+    if _model is not None:
+        return _model
+
+    if not genai:
         return None
+
+    api_key = _gemini_api_key()
+    if not api_key:
+        logger.warning(
+            "GEMINI_API_KEY not set. All Gemini calls will use the heuristic fallback. "
+            "Add GEMINI_API_KEY=... to your .env to enable AI evaluation."
+        )
+        return None
+    if len(api_key) < 20:
+        logger.error("GEMINI_API_KEY looks invalid (length %d).", len(api_key))
+        return None
+
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        return genai.GenerativeModel(GEMINI_MODEL_NAME)
+        genai.configure(api_key=api_key)
     except Exception:
-        logger.exception("Failed to configure Gemini model")
+        logger.exception("genai.configure() failed")
         return None
+
+    seen = set()
+    for name in _MODEL_CANDIDATES:
+        if not name or name in seen or name in _model_blacklist:
+            continue
+        seen.add(name)
+        try:
+            model = genai.GenerativeModel(name)
+            # Cheap probe so we don't hand back a model that 429s on first real call
+            model.generate_content(
+                "ok",
+                generation_config={"max_output_tokens": 4},
+                request_options={"timeout": 10},
+            )
+            _model = model
+            _model_name_used = name
+            logger.info("Gemini model ready: %s", name)
+            return _model
+        except Exception as e:
+            if _is_permanent_error(e):
+                _model_blacklist.add(name)
+                logger.error(
+                    "Gemini model %s permanently unavailable: %s: %s",
+                    name, type(e).__name__, str(e)[:200],
+                )
+            else:
+                logger.warning(
+                    "Gemini model %s probe failed (will retry next request): %s: %s",
+                    name, type(e).__name__, str(e)[:200],
+                )
+
+    logger.warning(
+        "No Gemini model is reachable right now. Using heuristic fallback. "
+        "Common causes: API key flagged as leaked (rotate it), free-tier daily "
+        "quota exceeded, or no quota for the configured model."
+    )
+    return None
+
+
+def _reset_model_for_retry():
+    """Clear the cached model so the next call retries from the top of the list."""
+    global _model, _model_name_used
+    _model = None
+    _model_name_used = None
 
 
 def _format_profile_block(profile: Dict[str, Any]) -> str:
@@ -297,9 +389,12 @@ Return ONLY a JSON array — no markdown fences, no commentary:
         parsed = parse_json_response(raw)
     except (TimeoutError, ValueError):
         logger.exception("Gemini question generation failed; using fallback")
+        _reset_model_for_retry()
         return _generate_skill_based_questions(norm["skills"], count, profile=norm, seed=session_seed)
-    except Exception:
+    except Exception as e:
         logger.exception("Unexpected error in generate_questions; using fallback")
+        if not _is_permanent_error(e):
+            _reset_model_for_retry()
         return _generate_skill_based_questions(norm["skills"], count, profile=norm, seed=session_seed)
 
     if not isinstance(parsed, list):
@@ -489,9 +584,12 @@ Return ONLY a JSON object - no markdown fences, no commentary:
         return evaluation
     except (TimeoutError, ValueError):
         logger.exception("Gemini evaluation failed; using fallback")
+        _reset_model_for_retry()
         return _fallback_evaluation(question, answer)
-    except Exception:
+    except Exception as e:
         logger.exception("Unexpected evaluation error; using fallback")
+        if not _is_permanent_error(e):
+            _reset_model_for_retry()
         return _fallback_evaluation(question, answer)
 
 
@@ -504,7 +602,7 @@ def evaluate_full_interview(skills: list, questions: list, answers: list) -> dic
     (questions_review, answer_evaluation, skill_summary, overall_evaluation)
     that result.html consumes. Falls back gracefully when Gemini is unavailable.
     """
-    pairs = list(zip(questions, answers))
+    pairs = list(zip(questions, answers or []))
     transcript_block = "\n\n".join(
         f"Q{i+1}: {q}\nA{i+1}: {a}" for i, (q, a) in enumerate(pairs)
     )
@@ -593,8 +691,11 @@ Return ONLY valid JSON - no commentary, no markdown fences:
         logger.error("Full-interview evaluation returned non-object; using fallback")
     except (TimeoutError, ValueError):
         logger.exception("evaluate_full_interview Gemini call failed")
-    except Exception:
+        _reset_model_for_retry()
+    except Exception as e:
         logger.exception("Unexpected full-interview evaluation error")
+        if not _is_permanent_error(e):
+            _reset_model_for_retry()
 
     return _fallback_full_evaluation(skills, questions, answers)
 
@@ -724,21 +825,38 @@ def compute_final_scores(per_question_results: list, full_evaluation: Optional[d
 # Fallbacks (offline path when GEMINI_API_KEY is missing or Gemini fails)
 # -------------------------------------------------------------------
 def _fallback_full_evaluation(skills: list, questions: list, answers: list) -> dict:
-    """Minimal fallback when Gemini is unavailable for batch evaluation."""
+    """Heuristic fallback when Gemini is unavailable for batch evaluation.
+
+    Uses the same per-answer heuristic as `_fallback_evaluation` so each
+    question card gets meaningful issues / justification instead of a generic
+    "Unable to evaluate" placeholder.
+    """
+    answers = answers or []
     n = len(questions)
     answer_evaluation = []
-    for i, (q, a) in enumerate(zip(questions, answers)):
-        words = len((a or "").split()) if a else 0
-        score = min(60, max(0, words * 3))
+    per_q_scores = []
+
+    for i, q in enumerate(questions):
+        a = answers[i] if i < len(answers) else ""
+        ev = _fallback_evaluation(q, a)
+        # Map the three 0-100 dimension scores into one strict 0-100 score
+        avg_pct = (ev.get("confidence", 0) + ev.get("technical", 0) + ev.get("communication", 0)) / 3
+        score = int(round(avg_pct))
+        per_q_scores.append(score)
+
+        issues = list(ev.get("areas_to_improve") or [])
+        if not a or not str(a).strip():
+            issues = ["No answer recorded"]
+
         answer_evaluation.append({
             "question": q,
-            "answer_summary": (a or "")[:100],
-            "issues": ["Unable to evaluate (AI unavailable)"],
+            "answer_summary": (a or "")[:160],
+            "issues": issues[:3],
             "score": score,
-            "justification": "Evaluated by word count only (Gemini unavailable).",
+            "justification": ev.get("summary") or "Scored heuristically (AI evaluation unavailable).",
         })
 
-    avg_score = int(sum(e["score"] for e in answer_evaluation) / n) if n else 0
+    avg_score = int(sum(per_q_scores) / n) if n else 0
     if avg_score >= 75:
         verdict = "Hire"
     elif avg_score >= 45:
@@ -751,7 +869,7 @@ def _fallback_full_evaluation(skills: list, questions: list, answers: list) -> d
             {
                 "skill": s,
                 "original_question": questions[i] if i < len(questions) else "",
-                "issues": ["Evaluation unavailable"],
+                "issues": [],
                 "improved_question": questions[i] if i < len(questions) else "",
                 "difficulty": "Intermediate",
             }
@@ -762,44 +880,110 @@ def _fallback_full_evaluation(skills: list, questions: list, answers: list) -> d
             {
                 "skill": s,
                 "average_score": avg_score,
-                "strength": "Medium",
-                "insight": "Detailed evaluation unavailable.",
+                "strength": "Strong" if avg_score >= 75 else "Medium" if avg_score >= 45 else "Weak",
+                "insight": "Heuristic estimate (AI evaluation unavailable).",
             }
             for s in skills
         ],
         "overall_evaluation": {
             "final_score": avg_score,
             "verdict": verdict,
-            "summary": "Automated evaluation was unavailable. Scores are approximate.",
+            "summary": (
+                "AI evaluator was unavailable; scores reflect a heuristic based on answer "
+                "length, specificity, and structure. Rotate the GEMINI_API_KEY or wait for "
+                "the daily quota to reset for full AI feedback."
+            ),
         },
     }
 
 
 def _fallback_evaluation(question: str, answer: str) -> dict:
-    """Fallback evaluation when Gemini is unavailable."""
-    words = len(answer.split()) if answer else 0
+    """Heuristic evaluation when Gemini is unavailable.
+
+    Produces structured `strengths`, `areas_to_improve`, `feedback`, and
+    `key_strength` / `key_gap` so the UI remains informative even with no AI.
+    Marks itself with `ai_unavailable: True` so the frontend can surface a
+    "scored heuristically" badge if it wants to.
+    """
+    answer = answer or ""
+    words = len(answer.split())
+    text = answer.lower()
+
+    has_example = any(tok in text for tok in ("example", "for instance", "e.g.", "such as"))
+    has_specifics = any(tok in text for tok in (
+        "project", "built", "implemented", "designed", "deployed", "tested",
+        "fixed", "debugged", "optimized", "refactored", "shipped",
+    ))
+    has_metrics = any(ch.isdigit() for ch in answer)
+    has_structure = answer.count(".") >= 2 or "first" in text or "then" in text or "finally" in text
+    hedging = sum(text.count(w) for w in ("i think maybe", "i guess", "kind of", "sort of", "probably"))
+
     if words == 0:
         confidence = technical = communication = 0
     elif words <= 2:
         confidence = technical = communication = 15
     else:
-        confidence = min(100, 40 + min(words // 2, 30))
-        technical = min(
-            100,
-            30
-            + (10 if any(tech in answer.lower() for tech in ["example", "project", "implemented"]) else 0)
-            + min(words // 3, 30),
+        # Confidence: length + specificity - hedging
+        confidence = min(100, 35 + min(words // 2, 30) + (10 if has_specifics else 0) - (5 * hedging))
+        # Technical: keyword-driven approximation
+        technical = min(100, 25
+                        + (15 if has_specifics else 0)
+                        + (10 if has_example else 0)
+                        + (10 if has_metrics else 0)
+                        + min(words // 3, 25))
+        # Communication: length-balanced
+        communication = min(100, 30 + min(words // 4, 35) + (10 if has_structure else 0))
+        confidence = max(0, confidence)
+
+    strengths = []
+    areas = []
+    if words > 0:
+        if has_specifics:
+            strengths.append("Mentions concrete actions you took (built / implemented / etc.)")
+        if has_example:
+            strengths.append("Includes at least one supporting example")
+        if has_metrics:
+            strengths.append("Backed by numeric specifics")
+        if has_structure:
+            strengths.append("Answer has clear structure")
+        if not strengths:
+            strengths.append("Engaged with the question")
+
+        if not has_specifics:
+            areas.append("Name the specific tools, projects, or actions you took")
+        if not has_example:
+            areas.append("Add a concrete example to ground the answer")
+        if not has_metrics:
+            areas.append("Quantify the impact where possible (numbers, time saved, etc.)")
+        if hedging:
+            areas.append("Drop hedging language (\"I think maybe\", \"kind of\") — speak with ownership")
+        if words < 30:
+            areas.append("Expand the answer — aim for 60–120 seconds of spoken detail")
+    else:
+        areas = ["Provide an answer to receive feedback"]
+
+    if words == 0:
+        summary = "No answer was recorded."
+        feedback = "Type or speak an answer so it can be evaluated."
+    else:
+        summary = (
+            f"Answer scored heuristically: {words} words, "
+            f"{'with' if has_specifics else 'without'} concrete specifics, "
+            f"{'with' if has_example else 'no'} example."
         )
-        communication = min(100, 35 + min(words // 4, 35))
+        feedback = (
+            areas[0] if areas else "Continue practising for fluency and depth."
+        )
 
     return {
         "confidence": confidence,
         "technical": technical,
         "communication": communication,
-        "summary": "Answer evaluated by length and keyword heuristic (Gemini unavailable).",
-        "feedback": "Provide more specific examples and technical details.",
-        "strengths": ["Attempted to answer the question"] if words else [],
-        "areas_to_improve": ["Add more technical specifics", "Provide concrete examples"],
-        "key_strength": "" if not words else "engaged with the question",
-        "key_gap": "Limited evaluation - automated scoring fallback in use.",
+        "summary": summary,
+        "feedback": feedback,
+        "strengths": strengths[:3],
+        "areas_to_improve": areas[:3],
+        "key_strength": strengths[0] if strengths else "",
+        "key_gap": areas[0] if areas else "",
+        "ai_unavailable": True,
     }

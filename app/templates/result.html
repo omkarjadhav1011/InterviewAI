@@ -164,14 +164,38 @@ if (results.length > 0) {
 
   // Answer analysis cards
   const feedbackDiv = document.getElementById('resultsList');
+
+  // Map a 0-100 score to a colour bucket
+  const scoreColor = (v) => v >= 75 ? '#00d4aa' : v >= 50 ? '#fac850' : '#ff6b6b';
+
+  // Build a labelled progress bar for one dimension (0-100 input)
+  function dimBar(label, raw) {
+    const v = Math.max(0, Math.min(100, Math.round(raw || 0)));
+    const c = scoreColor(v);
+    return `
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:11px;color:var(--text-secondary);text-transform:capitalize;letter-spacing:0.02em;">${label}</span>
+          <span style="font-size:11px;font-family:var(--font-mono);color:${c};">${v}</span>
+        </div>
+        <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;">
+          <div style="height:100%;width:${v}%;background:${c};border-radius:2px;transition:width 0.8s ease;"></div>
+        </div>
+      </div>
+    `;
+  }
+
   results.forEach((r, i) => {
-    const conf  = toDisplay(r.result && r.result.confidence)    || 0;
-    const tech  = toDisplay(r.result && r.result.technical)     || 0;
-    const comm  = toDisplay(r.result && r.result.communication) || 0;
-    const score = (r.overall_score !== undefined && r.overall_score !== null)
+    const res   = r.result || {};
+    // Raw 0-100 dimension scores (NOT divided by 10)
+    const confRaw = Number(res.confidence    || 0);
+    const techRaw = Number(res.technical     || 0);
+    const commRaw = Number(res.communication || 0);
+    const score   = (r.overall_score !== undefined && r.overall_score !== null)
       ? Number(r.overall_score).toFixed(1)
-      : ((conf + tech + comm) / 3).toFixed(1);
+      : (((confRaw + techRaw + commRaw) / 3) / 10).toFixed(1);
     const strict = strictMap[i] || null;
+    const aiDown = !!res.ai_unavailable;
 
     const card = document.createElement('div');
     card.style.cssText = 'padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.04);animation:fadeUp 0.4s ease both;';
@@ -182,16 +206,72 @@ if (results.length > 0) {
     const modeText  = (hasVoice && hasTyped) ? 'Speech + Typed' : hasVoice ? 'Speech' : hasTyped ? 'Typed' : 'No Input';
     const modeColor = (hasVoice && hasTyped) ? '#8b7ff5' : hasVoice ? '#00d4b8' : hasTyped ? '#f0a500' : '#7a8499';
 
+    const answerText = (r.answer || r.final || r.transcript || r.typed || '').trim();
+
+    const strengths   = Array.isArray(res.strengths) ? res.strengths.filter(Boolean) : [];
+    const improves    = Array.isArray(res.areas_to_improve) ? res.areas_to_improve.filter(Boolean) : [];
+    const keyStrength = (res.key_strength || '').trim();
+    const keyGap      = (res.key_gap || '').trim();
+
+    const scoreColor10 = scoreColor(Number(score) * 10);
+
     card.innerHTML = `
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap;">
         <span style="font-family:var(--font-mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-secondary);">Q${i+1}</span>
         <span style="font-size:0.7rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,0.05);border:1px solid ${modeColor}33;color:${modeColor};">${escHtml(modeText)}</span>
-        <span style="margin-left:auto;font-family:var(--font-display);font-size:17px;font-weight:600;color:var(--text);">${score}<small style="font-size:11px;color:var(--text-secondary);font-weight:500;">/10</small></span>
+        ${aiDown ? `<span style="font-size:0.7rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:rgba(250,200,80,0.08);border:1px solid rgba(250,200,80,0.25);color:#fac850;" title="AI evaluation was unavailable when this answer was scored — heuristic fallback was used">Heuristic</span>` : ''}
+        <span style="margin-left:auto;font-family:var(--font-display);font-size:18px;font-weight:600;color:${scoreColor10};">${score}<small style="font-size:11px;color:var(--text-secondary);font-weight:500;">/10</small></span>
       </div>
-      <p style="font-size:14px;color:var(--text-secondary);line-height:1.6;margin-bottom:${strict ? '10px' : '0'};">
-        ${escHtml((r.result && (r.result.feedback || r.result.summary)) || 'Good effort! Keep practising for smoother delivery.')}
+
+      <p style="font-size:13px;font-weight:500;color:var(--text);line-height:1.5;margin-bottom:10px;">
+        ${escHtml(r.question || ('Question ' + (i+1)))}
       </p>
-      ${strict && strict.issues && strict.issues.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">' + strict.issues.map(issue => `<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:4px;font-size:11px;background:var(--amber-dim);color:var(--amber);border:1px solid rgba(240,160,48,0.2);">${escHtml(issue)}</span>`).join('') + '</div>' : ''}
+
+      <div style="margin-bottom:12px;">
+        <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:6px;">Your answer</div>
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:10px 12px;font-size:13px;color:var(--text-secondary);line-height:1.6;max-height:160px;overflow-y:auto;white-space:pre-wrap;">${
+          answerText ? escHtml(answerText) : '<em style="color:var(--text-secondary);opacity:0.6;">No answer recorded</em>'
+        }</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;">
+        ${dimBar('confidence', confRaw)}
+        ${dimBar('technical', techRaw)}
+        ${dimBar('communication', commRaw)}
+      </div>
+
+      ${(res.feedback || res.summary) ? `
+        <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px;">
+          ${escHtml(res.feedback || res.summary)}
+        </p>
+      ` : ''}
+
+      ${strengths.length ? `
+        <div style="margin-bottom:8px;">
+          <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:4px;">Strengths</div>
+          <ul style="margin:0;padding-left:18px;color:var(--text-secondary);font-size:13px;line-height:1.6;">
+            ${strengths.map(s => `<li>${escHtml(s)}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+
+      ${improves.length ? `
+        <div style="margin-bottom:8px;">
+          <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-secondary);margin-bottom:4px;">Areas to improve</div>
+          <ul style="margin:0;padding-left:18px;color:var(--text-secondary);font-size:13px;line-height:1.6;">
+            ${improves.map(s => `<li>${escHtml(s)}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+
+      ${(keyStrength || keyGap) ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+          ${keyStrength ? `<div style="padding:8px 10px;background:rgba(0,212,170,0.06);border-left:2px solid #00d4aa;border-radius:0 6px 6px 0;font-size:12px;color:var(--text-secondary);line-height:1.5;"><strong style="color:#00d4aa;">Key strength: </strong>${escHtml(keyStrength)}</div>` : '<div></div>'}
+          ${keyGap      ? `<div style="padding:8px 10px;background:rgba(250,200,80,0.06);border-left:2px solid #fac850;border-radius:0 6px 6px 0;font-size:12px;color:var(--text-secondary);line-height:1.5;"><strong style="color:#fac850;">Key gap: </strong>${escHtml(keyGap)}</div>` : '<div></div>'}
+        </div>
+      ` : ''}
+
+      ${strict && strict.issues && strict.issues.length ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">' + strict.issues.map(issue => `<span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:4px;font-size:11px;background:var(--amber-dim);color:var(--amber);border:1px solid rgba(240,160,48,0.2);">${escHtml(issue)}</span>`).join('') + '</div>' : ''}
       ${strict && strict.justification ? `<p style="font-size:12px;color:var(--text-secondary);margin-top:8px;padding:10px 12px;background:rgba(255,255,255,0.02);border-left:2px solid var(--violet);border-radius:0 6px 6px 0;line-height:1.5;">${escHtml(strict.justification)}</p>` : ''}
     `;
     feedbackDiv.appendChild(card);

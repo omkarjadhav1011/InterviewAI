@@ -21,8 +21,54 @@ resume_bp = Blueprint('resume', __name__)
 @resume_bp.route('/')
 @login_required
 def home():
-    users = get_db().users
-    user_doc = users.find_one({'email': current_user.email})
+    db = get_db()
+    user_doc = db.users.find_one({'email': current_user.email}) or {}
+
+    runs = list(
+        db.interview_runs.find(
+            {'user_email': current_user.email},
+            {
+                'created_at': 1,
+                'final_scores': 1,
+                'results': 1,
+                'questions': 1,
+                'skills': 1,
+                'full_evaluation': 1,
+            },
+        ).sort('created_at', -1).limit(20)
+    )
+
+    latest_results = []
+    for r in runs:
+        fs = r.get('final_scores') or {}
+        per_q = r.get('results') or []
+        score = fs.get('overall_score')
+        if score is None and per_q:
+            scores = [
+                p.get('overall_score') for p in per_q
+                if isinstance(p.get('overall_score'), (int, float))
+            ]
+            score = round(sum(scores) / len(scores), 1) if scores else None
+
+        rec = fs.get('hire_recommendation') or ''
+        verdict_map = {
+            'strong_yes': 'Strong Hire',
+            'yes': 'Hire',
+            'maybe': 'Weak Hire',
+            'no': 'Reject',
+        }
+        verdict = verdict_map.get(rec, rec.replace('_', ' ').title() if rec else '')
+
+        created = r.get('created_at')
+        latest_results.append({
+            'overall_score': score,
+            'verdict': verdict,
+            'created_at': created.isoformat() if created else None,
+            'title': 'Mock Interview',
+            'num_questions': len(r.get('questions') or []) or len(per_q),
+        })
+
+    user_doc['latest_results'] = latest_results
     return render_template('home.html', user=user_doc)
 
 
