@@ -40,26 +40,64 @@ def _gemini_timeout() -> int:
         return _DEFAULT_GEMINI_TIMEOUT
 
 
-def _fallback_questions_from_config(count: int) -> List[str]:
-    """Return the configured hardcoded fallback questions as plain strings.
+# Skill-driven question templates, one per question type. Each template MUST contain
+# `{skill}` exactly once; the fallback generator substitutes the candidate's actual
+# skills (cycled if fewer skills than question types).
+_QUESTION_TEMPLATES_BY_TYPE = {
+    "technical_depth": [
+        "Walk me through how you would design a production-ready service using {skill}, including the key trade-offs you'd weigh.",
+        "Explain the {skill} concept you find most often misunderstood by engineers, and why it matters in production.",
+    ],
+    "practical_application": [
+        "Describe a concrete project where you applied {skill} to solve a real problem. What was the outcome and what did you measure?",
+        "How have you used {skill} in a production setting, and what specific challenge did it address?",
+    ],
+    "problem_solving": [
+        "A service built around {skill} is failing intermittently under load and the logs are unhelpful. Walk me through how you diagnose and resolve it.",
+        "You've been asked to migrate a critical component that relies on {skill} with zero downtime. What's your plan and where do you see the biggest risks?",
+    ],
+    "behavioural_technical": [
+        "Tell me about a time you made a difficult technical decision involving {skill}. What was the trade-off and what would you do differently today?",
+        "Describe a project that used {skill} where things went wrong. What did you learn, and how did it change how you work?",
+    ],
+    "innovation": [
+        "If you could redesign one common pattern in how {skill} is used today, what would it be and why?",
+        "What's the most impactful improvement you'd make to a {skill}-based system you've worked on if you had one more month?",
+    ],
+}
 
-    Falls back to a generic template list if Flask context is unavailable.
+# Order matters: matches the 5 question-type slots requested by the Gemini prompt.
+_QUESTION_TYPE_ORDER = (
+    "technical_depth",
+    "practical_application",
+    "problem_solving",
+    "behavioural_technical",
+    "innovation",
+)
+
+
+def _generate_skill_based_questions(skills: List[str], count: int = 5) -> List[str]:
+    """Deterministically generate `count` distinct, skill-grounded questions.
+
+    Uses the candidate's actual skills (cycled if fewer than `count`) and varies
+    the question type across the slot order. Each question references at least
+    one specific skill — never a generic placeholder.
     """
-    try:
-        from flask import current_app
-        cfg = current_app.config.get("HARDCODED_FALLBACK_QUESTIONS") or []
-        out = [q["question"] if isinstance(q, dict) else str(q) for q in cfg[:count]]
-        if out:
-            return out
-    except Exception:
-        pass
-    return [
-        "Describe a technical project you led from design to deployment.",
-        "Walk me through how you would debug a production outage with no logs.",
-        "Tell me about a time you had to learn a new technology under a tight deadline.",
-        "How would you redesign a system to handle 10x traffic with no downtime?",
-        "What's the most impactful technical improvement you'd make to your latest project?",
-    ][:count]
+    skills = [s for s in (skills or []) if isinstance(s, str) and s.strip()]
+    if not skills:
+        # Final-tier fallback: still skill-shaped, just generic-domain
+        skills = ["your strongest technical area"]
+
+    # Per-template-list rotating index so different runs over the same skill set
+    # don't produce identical wording. We use len(skill_index) as a cheap salt.
+    questions: List[str] = []
+    for i in range(count):
+        qtype = _QUESTION_TYPE_ORDER[i % len(_QUESTION_TYPE_ORDER)]
+        templates = _QUESTION_TEMPLATES_BY_TYPE[qtype]
+        skill = skills[i % len(skills)]
+        template = templates[i % len(templates)]
+        questions.append(template.format(skill=skill))
+    return questions
 
 
 def _get_model():
@@ -93,7 +131,7 @@ def generate_questions(skills: List[str], count: int = 5,
     model = _get_model()
     if model is None:
         logger.info("Using fallback question generator (no Gemini).")
-        return _fallback_questions_from_config(count)
+        return _generate_skill_based_questions(skills, count)
 
     prompt = f"""You are a senior technical interviewer at a top-tier technology company.
 Generate exactly 5 interview questions for a candidate with the following profile.
@@ -128,14 +166,14 @@ Return ONLY a JSON array - no markdown fences, no commentary:
         parsed = parse_json_response(raw)
     except (TimeoutError, ValueError):
         logger.exception("Gemini question generation failed; using fallback")
-        return _fallback_questions_from_config(count)
+        return _generate_skill_based_questions(skills, count)
     except Exception:
         logger.exception("Unexpected error in generate_questions; using fallback")
-        return _fallback_questions_from_config(count)
+        return _generate_skill_based_questions(skills, count)
 
     if not isinstance(parsed, list):
         logger.error("Gemini returned non-array for questions; using fallback")
-        return _fallback_questions_from_config(count)
+        return _generate_skill_based_questions(skills, count)
 
     questions: List[str] = []
     for item in parsed:
@@ -145,11 +183,11 @@ Return ONLY a JSON array - no markdown fences, no commentary:
             questions.append(item.strip())
 
     if not questions:
-        return _fallback_questions_from_config(count)
+        return _generate_skill_based_questions(skills, count)
 
-    # Pad or truncate to caller's requested count
+    # Pad or truncate to caller's requested count, using skill-based templates
     if len(questions) < count:
-        pad = _fallback_questions_from_config(count - len(questions))
+        pad = _generate_skill_based_questions(skills, count - len(questions))
         questions.extend(pad)
     return questions[:count]
 

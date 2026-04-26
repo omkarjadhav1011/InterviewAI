@@ -133,15 +133,15 @@ def upload():
     except Exception:
         current_app.logger.exception('Failed to upsert resume document (non-fatal)')
 
-    # Generate questions synchronously, with config-driven fallback on failure
+    # Generate questions synchronously. generate_questions() always returns
+    # skill-based output (Gemini when available, deterministic skill-template
+    # fallback otherwise) so we never substitute static text for the user's skills.
     try:
-        questions = generate_questions(skills, count=5) or []
+        questions = generate_questions(skills, count=5)
     except Exception:
-        current_app.logger.exception('Question generation crashed; using config fallback')
-        questions = []
-    if not questions:
-        cfg_fallback = current_app.config.get('HARDCODED_FALLBACK_QUESTIONS') or []
-        questions = [q['question'] if isinstance(q, dict) else str(q) for q in cfg_fallback[:5]]
+        current_app.logger.exception('Question generation crashed; using skill-template fallback')
+        from ..services.gemini_service import _generate_skill_based_questions
+        questions = _generate_skill_based_questions(skills, count=5)
     session['interview_questions'] = questions
     session['interview_results'] = []
 
