@@ -15,7 +15,7 @@ def start_transcription():
     # Reset per-session transcript on each new recording
     session[_SESSION_KEY] = ""
     result = get_ws_url()
-    code = 500 if result.get("status") == "error" else 200
+    code = 503 if result.get("status") == "error" else 200
     return jsonify(result), code
 
 

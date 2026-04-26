@@ -130,9 +130,9 @@ def api_tts():
     if not text:
         return jsonify({'status': 'error', 'error': 'text is required'}), 400
     audio_url = tts_synthesize(text)
-    if audio_url is None:
-        return jsonify({'status': 'error', 'error': 'TTS service unavailable'}), 503
-    return jsonify({'status': 'ok', 'audio_url': audio_url})
+    # When VAPI is unavailable, return audio_url=null so the frontend uses
+    # its built-in SpeechSynthesisUtterance fallback without surfacing a 503.
+    return jsonify({'status': 'ok', 'audio_url': audio_url, 'fallback': audio_url is None})
 
 
 @interview_bp.route('/api/stt', methods=['POST'])
