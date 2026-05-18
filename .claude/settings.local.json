@@ -5,7 +5,31 @@
       "Bash(python3:*)",
       "Bash(git -C /c/Users/nonst/Downloads/project/project log --oneline -5)",
       "Bash(git -C /c/Users/nonst/Downloads/project/project ls-files)",
-      "Bash(python -c \"from app import create_app; app = create_app\\(\\); print\\('App created successfully'\\)\")"
+      "Bash(python -c \"from app import create_app; app = create_app\\(\\); print\\('App created successfully'\\)\")",
+      "Bash(python:*)",
+      "Bash(git log *)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Read(//c/tmp/**)",
+      "Bash(mkdir design_bundle)",
+      "Bash(tar -xf \"C:/Users/nonst/.claude/projects/C--Users-nonst-Downloads-project-project/a2106067-ffd4-447f-bf34-83b37ad10616/tool-results/webfetch-1777128206554-90unzq.bin\" -C design_bundle)",
+      "Bash(node \"C:\\\\Users\\\\nonst\\\\.claude\\\\skills\\\\blackbook-generator\\\\scripts\\\\generate_blackbook.js\" \"C:\\\\Users\\\\nonst\\\\Downloads\\\\project\\\\project\\\\blackbook_input.json\" \"C:\\\\Users\\\\nonst\\\\Downloads\\\\project\\\\project\\\\output\\\\AI_Interview_Prep_BlackBook.docx\")",
+      "Bash(pip install *)",
+      "PowerShell($env:PYTHONIOENCODING=\"utf-8\"; python \"C:\\\\Users\\\\nonst\\\\.claude\\\\skills\\\\project-presentation-creator\\\\scripts\\\\create_presentation.py\" --project-name \"AI-Powered Mock Interview Platform\" --description \"AI-driven mock interview platform with resume parsing, adaptive Gemini-generated questions, real-time AssemblyAI transcription, and automated scoring.\" --codebase \"C:\\\\Users\\\\nonst\\\\Downloads\\\\project\\\\project\" --team \"[Team Member 1]\" \"[Team Member 2]\" \"[Team Member 3]\" --guide \"[Guide Name]\" --output \"C:\\\\Users\\\\nonst\\\\Downloads\\\\project\\\\project\\\\output\" --non-interactive 2>&1)",
+      "Bash(node \"C:\\\\Users\\\\nonst\\\\.claude\\\\skills\\\\blackbook-generator\\\\scripts\\\\generate_blackbook.js\" blackbook_input.json \"C:\\\\Users\\\\nonst\\\\Downloads\\\\project\\\\project\\\\output\\\\AI_Interview_Prep_BlackBook_new.docx\")",
+      "Bash(mmdc --version)",
+      "Bash(npx -y @mermaid-js/mermaid-cli --version)",
+      "Bash(where mmdc *)",
+      "Bash(where mermaid *)",
+      "Read(//c/Users/nonst/AppData/Roaming/npm/**)",
+      "Read(//c/Users/nonst/AppData/Local/**)",
+      "Bash(fnm list *)",
+      "Bash(fnm current *)",
+      "Bash(fnm use *)",
+      "Bash(npm list *)",
+      "Bash(npm install *)",
+      "Bash(Read C:\\\\Users\\\\nonst\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-nonst-Downloads-project-project\\\\bf74a7fa-bc27-44c3-a1cc-86c1d126d536\\\\tasks\\\\bp8ogts6w.output)",
+      "Bash(mmdc -i \"C:\\\\Users\\\\nonst\\\\Downloads\\\\project\\\\project\\\\output\\\\dfd.mmd\" -o \"C:\\\\Users\\\\nonst\\\\Downloads\\\\project\\\\project\\\\output\\\\dfd.png\" -w 1400 -H 900 --backgroundColor white)",
+      "Bash(node \"C:\\\\Users\\\\nonst\\\\.claude\\\\skills\\\\blackbook-generator\\\\scripts\\\\generate_blackbook.js\" blackbook_input.json \"C:\\\\Users\\\\nonst\\\\Downloads\\\\AI_Interview_Prep_BlackBook.docx\")"
     ]
   }
 }

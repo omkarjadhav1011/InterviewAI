@@ -1,0 +1,488 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevMetrics — Analytics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --bg:       oklch(8% 0.005 210);
+  --surface:  oklch(13% 0.008 210);
+  --s2:       oklch(18% 0.012 210);
+  --s3:       oklch(22% 0.015 210);
+  --fg:       oklch(94% 0.006 210);
+  --muted:    oklch(52% 0.015 205);
+  --dim:      oklch(38% 0.012 210);
+  --border:   oklch(22% 0.014 210);
+  --accent:   oklch(70% 0.18 195);
+  --a-dim:    oklch(70% 0.18 195 / 0.14);
+  --green:    oklch(67% 0.17 145);
+  --g-dim:    oklch(67% 0.17 145 / 0.14);
+  --red:      oklch(62% 0.19 25);
+  --r-dim:    oklch(62% 0.19 25 / 0.14);
+  --amber:    oklch(73% 0.16 55);
+  --am-dim:   oklch(73% 0.16 55 / 0.14);
+  --violet:   oklch(65% 0.18 285);
+  --v-dim:    oklch(65% 0.18 285 / 0.14);
+  --mono: 'JetBrains Mono','Cascadia Code','Fira Code','IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --ui:   -apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+  --r: 6px;
+}
+
+html,body{background:var(--bg);color:var(--fg);font-family:var(--ui);font-size:13px;line-height:1.5;min-height:100vh}
+
+.header{
+  display:flex;align-items:center;gap:20px;
+  padding:10px 24px;border-bottom:1px solid var(--border);
+  background:var(--surface);position:sticky;top:0;z-index:100;
+}
+.logo{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13.5px;font-weight:700;letter-spacing:-.03em;white-space:nowrap;color:var(--fg)}
+.logo-mark{width:26px;height:26px;border-radius:5px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:oklch(8% 0.005 210);flex-shrink:0}
+.nav-tabs{display:flex;gap:1px;margin-left:4px}
+.nav-tab{padding:5px 13px;border-radius:4px;font-size:12px;color:var(--muted);cursor:pointer;border:none;background:none;font-family:var(--ui);transition:all .12s}
+.nav-tab:hover{color:var(--fg);background:var(--s2)}
+.nav-tab.active{color:var(--fg);background:var(--s2)}
+.h-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.date-btns{display:flex;gap:3px}
+.dbtn{padding:3px 9px;border-radius:4px;border:1px solid var(--border);background:none;color:var(--muted);font-family:var(--mono);font-size:10.5px;cursor:pointer;transition:all .12s}
+.dbtn:hover{color:var(--fg);border-color:var(--s3)}
+.dbtn.active{color:var(--accent);border-color:var(--accent)}
+.live-badge{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.clock{font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+
+.main{padding:16px 24px;display:flex;flex-direction:column;gap:12px;max-width:1700px;margin:0 auto}
+
+.kpi-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;display:flex;flex-direction:column;gap:5px;cursor:default;transition:border-color .15s}
+.kpi:hover{border-color:var(--s3)}
+.kpi-label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-family:var(--mono)}
+.kpi-val{font-size:22px;font-weight:650;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--fg);letter-spacing:-.03em;line-height:1.1}
+.kpi-foot{display:flex;align-items:center;justify-content:space-between;margin-top:3px}
+.delta{font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:3px}
+.up{color:var(--green)}.dn{color:var(--red)}
+
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:15px 18px}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.card-label{font-size:10.5px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.card-kicker{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--fg)}
+.card-kicker .pos{color:var(--green);font-size:10.5px;margin-left:5px}
+.chart-wrap{position:relative;height:150px}
+
+.row3{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.world-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:15px 18px}
+.world-svg-wrap{height:210px;margin-top:6px}
+.cohort-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:15px 18px;overflow:hidden}
+.cohort-scroll{overflow-x:auto;margin-top:6px}
+.cohort-tbl{border-collapse:collapse;font-family:var(--mono);font-size:10px;font-variant-numeric:tabular-nums;width:100%}
+.cohort-tbl th{color:var(--dim);font-weight:500;padding:2px 4px;text-align:center;font-size:9.5px}
+.cohort-tbl th:first-child{text-align:left;padding-left:0;width:46px}
+.cohort-tbl td{padding:2px 3px;text-align:center;border-radius:2px}
+.cohort-tbl td:first-child{text-align:left;color:var(--muted);font-size:9.5px;padding-right:6px}
+
+.row4{display:grid;grid-template-columns:3fr 2fr;gap:10px}
+.lb-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:15px 18px}
+.lb-tbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums}
+.lb-tbl thead th{color:var(--muted);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;padding:3px 8px;border-bottom:1px solid var(--border);font-weight:500;text-align:right}
+.lb-tbl thead th:first-child,.lb-tbl thead th:nth-child(2){text-align:left}
+.lb-tbl tbody td{padding:7px 8px;border-bottom:1px solid oklch(22% 0.014 210 / .5);vertical-align:middle;color:var(--fg);text-align:right}
+.lb-tbl tbody td:first-child,.lb-tbl tbody td:nth-child(2){text-align:left}
+.lb-tbl tbody tr:last-child td{border-bottom:none}
+.lb-tbl tbody tr:hover td{background:var(--s2)}
+.cust-name{display:flex;align-items:center;gap:7px}
+.av{width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
+
+.feed-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:15px 15px;display:flex;flex-direction:column}
+.feed-list{overflow:hidden;max-height:260px;display:flex;flex-direction:column}
+.feed-item{display:flex;align-items:flex-start;gap:9px;padding:6px 0;border-bottom:1px solid oklch(22% 0.014 210 / .4);animation:slide-in .25s ease;flex-shrink:0}
+.feed-item:last-child{border-bottom:none}
+@keyframes slide-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.feed-ico{width:18px;height:18px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;margin-top:2px}
+.feed-body{flex:1;min-width:0}
+.feed-text{font-size:11.5px;color:var(--fg);line-height:1.4}
+.feed-text b{font-family:var(--mono);font-size:10.5px}
+.feed-meta{font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:1px}
+
+.pill{display:inline-flex;align-items:center;padding:1px 7px;border-radius:20px;font-family:var(--mono);font-size:10px;font-weight:600}
+.p-green{background:var(--g-dim);color:var(--green)}
+.p-red{background:var(--r-dim);color:var(--red)}
+.p-blue{background:var(--a-dim);color:var(--accent)}
+.p-amber{background:var(--am-dim);color:var(--amber)}
+
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-mark">D</div>
+    DevMetrics
+  </div>
+  <nav class="nav-tabs">
+    <button class="nav-tab active">Overview</button>
+    <button class="nav-tab">Revenue</button>
+    <button class="nav-tab">Usage</button>
+    <button class="nav-tab">Customers</button>
+    <button class="nav-tab">Infra</button>
+  </nav>
+  <div class="h-right">
+    <div class="date-btns">
+      <button class="dbtn">7d</button>
+      <button class="dbtn active">30d</button>
+      <button class="dbtn">90d</button>
+      <button class="dbtn">12m</button>
+    </div>
+    <div class="live-badge">
+      <div class="live-dot"></div> Live
+    </div>
+    <div class="clock" id="clock"></div>
+  </div>
+</header>
+
+<main class="main">
+  <div class="kpi-strip" id="kpi-strip"></div>
+
+  <div class="row2">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-label">Monthly Recurring Revenue</span>
+        <span class="card-kicker">$847,320 <span class="pos">↑ 14.2% YoY</span></span>
+      </div>
+      <div class="chart-wrap"><canvas id="mrr-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <span class="card-label">Active Workspaces</span>
+        <span class="card-kicker">12,847 <span class="pos">↑ 8.7% MoM</span></span>
+      </div>
+      <div class="chart-wrap"><canvas id="ws-chart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="row3">
+    <div class="world-card">
+      <div class="card-head">
+        <span class="card-label">Global Usage Distribution</span>
+        <span class="mono muted" style="font-size:11px">62 countries · last 30d</span>
+      </div>
+      <div class="world-svg-wrap" id="world-map"></div>
+    </div>
+    <div class="cohort-card">
+      <div class="card-head">
+        <span class="card-label">Cohort Retention</span>
+        <span class="mono muted" style="font-size:11px">by signup month</span>
+      </div>
+      <div class="cohort-scroll" id="cohort-wrap"></div>
+    </div>
+  </div>
+
+  <div class="row4">
+    <div class="lb-card">
+      <div class="card-head">
+        <span class="card-label">Top Customers</span>
+        <span class="mono muted" style="font-size:11px">ranked by MRR</span>
+      </div>
+      <table class="lb-tbl">
+        <thead>
+          <tr>
+            <th style="width:24px">#</th>
+            <th>Company</th>
+            <th>MRR</th>
+            <th>Workspaces</th>
+            <th>API / mo</th>
+            <th>WoW</th>
+            <th style="width:72px">Trend</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="lb-body"></tbody>
+      </table>
+    </div>
+    <div class="feed-card">
+      <div class="card-head">
+        <span class="card-label">Live Events</span>
+        <div class="live-badge"><div class="live-dot"></div></div>
+      </div>
+      <div class="feed-list" id="feed-list"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    var t = Math.imul(seed ^ seed >>> 15, seed | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const rng = mulberry32(0xDEADBEEF);
+function ri(a,b){ return Math.floor(rng()*(b-a+1))+a; }
+
+function tickClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toUTCString().replace(/.*,\s/,'').replace(/:\d\d GMT/,' UTC');
+}
+tickClock(); setInterval(tickClock,1000);
+
+document.querySelectorAll('.nav-tab').forEach(t => t.addEventListener('click', function(){
+  document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));
+  this.classList.add('active');
+}));
+document.querySelectorAll('.dbtn').forEach(b => b.addEventListener('click', function(){
+  document.querySelectorAll('.dbtn').forEach(x=>x.classList.remove('active'));
+  this.classList.add('active');
+}));
+
+function spark(data, stroke, w=62, h=22){
+  const mn=Math.min(...data), mx=Math.max(...data), range=mx-mn||1;
+  const pts=data.map((v,i)=>`${(i/(data.length-1)*w).toFixed(1)},${(h-((v-mn)/range*(h-3))-1.5).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block"><polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+const kpis = [
+  {lbl:'MRR',           val:'$847.3K', d:'+$48.2K', up:true,  s:[620,640,658,670,682,697,708,720,733,748,763,782,800,821,847]},
+  {lbl:'ARR',           val:'$10.17M', d:'+$578K',  up:true,  s:[7440,7680,7896,8160,8460,8760,9120,9600,9840,10080,10170]},
+  {lbl:'Active WSs',    val:'12,847',  d:'+1,024',  up:true,  s:[9800,10100,10500,10900,11300,11600,11900,12100,12400,12600,12847]},
+  {lbl:'New Signups/wk',val:'843',     d:'−62',     up:false, s:[920,905,890,870,870,850,870,870,860,855,850,843]},
+  {lbl:'Churn Rate',    val:'1.84%',   d:'−0.12pp', up:true,  s:[2.4,2.3,2.2,2.1,2.1,2.0,2.0,1.95,1.9,1.88,1.85,1.84]},
+  {lbl:'ARPU / WS',     val:'$65.95',  d:'+$2.30',  up:true,  s:[58,59,60,61,62,62,63,63,64,65,65,65.95]},
+];
+const strip = document.getElementById('kpi-strip');
+kpis.forEach(k => {
+  const col = k.up ? 'var(--green)' : 'var(--red)';
+  strip.insertAdjacentHTML('beforeend', `
+    <div class="kpi">
+      <div class="kpi-label">${k.lbl}</div>
+      <div class="kpi-val">${k.val}</div>
+      <div class="kpi-foot">
+        <div class="delta ${k.up?'up':'dn'}">${k.up?'▲':'▼'} ${k.d} WoW</div>
+        ${spark(k.s, col)}
+      </div>
+    </div>`);
+});
+
+Chart.defaults.color = 'oklch(52% 0.015 205)';
+Chart.defaults.font.family = "'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace";
+Chart.defaults.font.size = 10;
+
+function lineChart(id, labels, datasets){
+  return new Chart(document.getElementById(id).getContext('2d'), {
+    type:'line', data:{labels, datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'oklch(18% 0.012 210)',borderColor:'oklch(22% 0.014 210)',borderWidth:1,padding:10,cornerRadius:5,titleFont:{size:10},bodyFont:{size:11}}
+      },
+      scales:{
+        x:{grid:{color:'oklch(17% 0.01 210)',drawTicks:false},border:{display:false},ticks:{maxTicksLimit:7,maxRotation:0,color:'oklch(45% 0.012 210)'}},
+        y:{grid:{color:'oklch(17% 0.01 210)',drawTicks:false},border:{display:false},ticks:{maxTicksLimit:5,color:'oklch(45% 0.012 210)'}}
+      },
+      elements:{point:{radius:0,hoverRadius:4,hoverBorderWidth:2}}
+    }
+  });
+}
+
+const months = ['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May'];
+
+const mrrCtx = document.getElementById('mrr-chart').getContext('2d');
+const mrrGrad = mrrCtx.createLinearGradient(0,0,0,150);
+mrrGrad.addColorStop(0,'oklch(70% 0.18 195 / 0.28)');
+mrrGrad.addColorStop(1,'oklch(70% 0.18 195 / 0.02)');
+lineChart('mrr-chart', months, [{label:'MRR ($K)',data:[582,618,645,668,695,718,740,762,789,810,832,847],borderColor:'oklch(70% 0.18 195)',backgroundColor:mrrGrad,fill:true,borderWidth:2,tension:0.42}]);
+
+const wsCtx = document.getElementById('ws-chart').getContext('2d');
+const wsGrad = wsCtx.createLinearGradient(0,0,0,150);
+wsGrad.addColorStop(0,'oklch(67% 0.17 145 / 0.22)');
+wsGrad.addColorStop(1,'oklch(67% 0.17 145 / 0.02)');
+lineChart('ws-chart', months, [{label:'Workspaces',data:[9400,9750,10100,10420,10700,10980,11300,11620,11960,12250,12580,12847],borderColor:'oklch(67% 0.17 145)',backgroundColor:wsGrad,fill:true,borderWidth:2,tension:0.42}]);
+
+(function buildMap(){
+  const geoData = [
+    ['United States','US',14,35,4820],['Canada','CA',13,23,890],
+    ['United Kingdom','GB',46.5,22,1240],['Germany','DE',49.5,21,980],
+    ['France','FR',47.5,24,720],['Netherlands','NL',48.5,20.5,560],
+    ['India','IN',66,40,1650],['Australia','AU',80,63,640],
+    ['Brazil','BR',27,57,480],['Japan','JP',84,30,720],
+    ['Singapore','SG',78,47,390],['Sweden','SE',51,16,280],
+    ['Poland','PL',53,22,210],['Spain','ES',45,27.5,195],
+    ['Italy','IT',50,26.5,175],['South Korea','KR',83,30,310],
+    ['Israel','IL',57.5,34,265],['Mexico','MX',15,40,180],
+    ['Argentina','AR',24,67,145],['Ukraine','UA',55,22,190],
+    ['Switzerland','CH',49.5,23.5,220],['Denmark','DK',49.5,18,165],
+    ['Finland','FI',52,15.5,145],['Norway','NO',49,16.5,135],
+    ['Portugal','PT',43.5,27.5,110],['Czech Rep.','CZ',51.5,22,98],
+    ['Austria','AT',50.5,23,92],['Belgium','BE',48,21.5,88],
+    ['New Zealand','NZ',88,68,78],['South Africa','ZA',53,66,72],
+    ['China','CN',76,30,340],['Russia','RU',63,18,210],
+  ];
+  const maxG = Math.max(...geoData.map(g=>g[4]));
+  let svg = `<svg viewBox="0 0 100 52" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <radialGradient id="gbg" cx="50%" cy="50%" r="70%">
+    <stop offset="0%" stop-color="oklch(11% 0.007 210)"/>
+    <stop offset="100%" stop-color="oklch(9% 0.005 210)"/>
+  </radialGradient>
+  <linearGradient id="lg" x1="0" x2="1" y1="0" y2="0">
+    <stop offset="0%" stop-color="oklch(22% 0.05 195)"/>
+    <stop offset="100%" stop-color="oklch(70% 0.18 195)"/>
+  </linearGradient>
+</defs>
+<rect width="100" height="52" fill="url(#gbg)" rx="3"/>
+<g stroke="oklch(18% 0.01 210)" stroke-width="0.15" opacity="0.5">
+  <line x1="0" y1="15.6" x2="100" y2="15.6"/>
+  <line x1="0" y1="26" x2="100" y2="26"/>
+  <line x1="0" y1="36.4" x2="100" y2="36.4"/>
+  <line x1="25" y1="0" x2="25" y2="52"/>
+  <line x1="50" y1="0" x2="50" y2="52"/>
+  <line x1="75" y1="0" x2="75" y2="52"/>
+</g>
+<g fill="oklch(16% 0.009 210)" stroke="oklch(21% 0.012 210)" stroke-width="0.25">
+  <path d="M4,14 Q8,10 14,11 Q20,11 24,14 Q28,16 29,20 Q30,26 28,32 Q26,36 22,38 Q18,40 14,38 Q10,36 7,30 Q4,24 4,18 Z"/>
+  <path d="M20,42 Q24,40 28,40 Q32,42 33,47 Q32,52 28,52 L22,52 Q18,50 18,46 Z"/>
+  <path d="M42,13 Q47,12 54,13 Q58,14 59,18 Q59,22 57,25 Q54,27 50,27 Q46,27 43,25 Q41,22 41,18 Z"/>
+  <path d="M43,29 Q47,28 54,28 Q58,29 60,33 Q61,38 58,44 Q55,50 51,52 L47,52 Q43,50 41,44 Q39,38 40,33 Z"/>
+  <path d="M26,8 Q30,7 33,9 Q34,12 32,14 Q29,15 26,14 Q24,12 24,10 Z"/>
+  <path d="M59,12 Q68,10 80,11 Q88,12 91,16 Q93,20 91,24 Q88,28 82,30 Q75,32 68,30 Q62,28 58,24 Q57,20 57,16 Z"/>
+  <path d="M62,30 Q68,30 74,32 Q80,33 84,36 Q85,40 83,44 Q80,47 76,46 Q70,44 66,40 Q62,36 61,32 Z"/>
+  <path d="M75,56 Q80,53 86,53 Q90,54 91,58 Q90,62 86,64 Q81,66 77,64 Q73,61 73,58 Z"/>
+  <path d="M82,26 Q85,25 87,27 Q87,30 85,31 Q83,31 82,29 Z"/>
+  <path d="M44.5,19 Q46,18.5 47.5,19.5 Q48,21.5 46.5,22.5 Q45,22.5 44.5,21 Z"/>
+</g>`;
+  geoData.forEach(([name,code,x,y,val]) => {
+    const t = val/maxG;
+    const l = 28+t*42, c = 0.05+t*0.13, r = 0.55+t*2.2;
+    const col = `oklch(${l.toFixed(0)}% ${c.toFixed(3)} 195)`;
+    svg += `<circle cx="${x}" cy="${y}" r="${r.toFixed(2)}" fill="${col}" opacity="${(0.7+t*0.3).toFixed(2)}"><title>${name}: ${val.toLocaleString()} active workspaces</title></circle>`;
+    if(t>0.22) svg += `<text x="${(x+r+0.4).toFixed(1)}" y="${(y+0.55).toFixed(1)}" font-size="1.9" fill="oklch(70% 0.18 195 / 0.7)" font-family="monospace">${code}</text>`;
+  });
+  svg += `<rect x="2" y="47" width="18" height="1.6" fill="url(#lg)" rx="0.5"/>
+<text x="1.8" y="46" font-size="2" fill="oklch(42% 0.012 205)" font-family="monospace">Low</text>
+<text x="21" y="46" font-size="2" fill="oklch(42% 0.012 205)" font-family="monospace">High</text>
+<text x="2" y="51" font-size="1.8" fill="oklch(38% 0.012 205)" font-family="monospace">Active workspaces</text></svg>`;
+  document.getElementById('world-map').innerHTML = svg;
+})();
+
+(function buildCohort(){
+  const rng2 = mulberry32(0xC0C0AB1E);
+  function ri2(a,b){ return Math.floor(rng2()*(b-a+1))+a; }
+  const curve = [100,72,58,49,43,39,36,34,32,31,30,29];
+  const lbls = ['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May'];
+  const cohorts = lbls.map((_,ci) =>
+    curve.map(v => Math.max(0,v+ri2(-4,4))).slice(0,lbls.length-ci)
+  );
+  function cellStyle(v){
+    if(v===100) return `background:oklch(65% 0.17 145 / 0.3);color:oklch(75% 0.15 145)`;
+    const t=v/100, l=12+t*52, c=t>0.05?0.01+t*0.17:0, h=t>0.5?155:t>0.25?195:210, tl=Math.min(90,30+t*65);
+    return `background:oklch(${l.toFixed(0)}% ${c.toFixed(3)} ${h});color:oklch(${tl.toFixed(0)}% 0.01 ${h})`;
+  }
+  let html=`<table class="cohort-tbl"><thead><tr><th>Cohort</th>`;
+  lbls.forEach((_,i)=>{html+=`<th>M${i}</th>`;});
+  html+=`</tr></thead><tbody>`;
+  cohorts.forEach((row,ci)=>{
+    html+=`<tr><td>${lbls[ci]}</td>`;
+    lbls.forEach((_,mi)=>{
+      if(mi<row.length) html+=`<td style="${cellStyle(row[mi])}">${row[mi]}</td>`;
+      else html+=`<td style="opacity:.1;color:var(--dim)">—</td>`;
+    });
+    html+=`</tr>`;
+  });
+  html+=`</tbody></table>`;
+  document.getElementById('cohort-wrap').innerHTML=html;
+})();
+
+const customers = [
+  {n:'Axiom Labs',      ab:'AX',mrr:24800,ws:48,api:'8.2M',wow:'+12.4%',up:true, s:[18000,19500,20800,22000,23100,24000,24800],col:'oklch(65% 0.18 265)'},
+  {n:'Northforge Inc',  ab:'NF',mrr:19600,ws:36,api:'6.1M',wow:'+8.1%', up:true, s:[16000,16800,17900,18400,18800,19200,19600],col:'oklch(67% 0.17 145)'},
+  {n:'Cascade Systems', ab:'CS',mrr:17200,ws:31,api:'5.4M',wow:'+4.2%', up:true, s:[15800,16100,16400,16600,16800,17000,17200],col:'oklch(70% 0.18 195)'},
+  {n:'Pulsar Dev',      ab:'PD',mrr:14900,ws:28,api:'4.8M',wow:'−1.3%', up:false,s:[15600,15400,15200,15000,14900,14800,14900],col:'oklch(73% 0.16 55)'},
+  {n:'Helix Cloud',     ab:'HC',mrr:13400,ws:24,api:'4.2M',wow:'+9.7%', up:true, s:[10800,11200,12100,12500,12900,13100,13400],col:'oklch(65% 0.18 300)'},
+  {n:'Vektor IO',       ab:'VI',mrr:11700,ws:21,api:'3.7M',wow:'+6.3%', up:true, s:[10000,10300,10600,11100,11300,11500,11700],col:'oklch(68% 0.16 22)'},
+  {n:'Obsidian Tech',   ab:'OT',mrr:10200,ws:18,api:'3.1M',wow:'+2.1%', up:true, s:[9600,9700,9900,10000,10000,10100,10200],  col:'oklch(70% 0.15 240)'},
+  {n:'Meridian AI',     ab:'MA',mrr:9800, ws:17,api:'2.9M',wow:'−4.6%', up:false,s:[11200,11000,10500,10200,10000,9900,9800], col:'oklch(68% 0.14 160)'},
+];
+const lbBody = document.getElementById('lb-body');
+customers.forEach((c,i)=>{
+  const spk=spark(c.s,c.up?'var(--green)':'var(--red)',54,18);
+  lbBody.insertAdjacentHTML('beforeend',`
+    <tr>
+      <td class="mono" style="color:var(--dim);text-align:right;font-size:10px">${i+1}</td>
+      <td><div class="cust-name"><div class="av" style="background:${c.col}1a;color:${c.col}">${c.ab}</div>${c.n}</div></td>
+      <td class="mono">$${(c.mrr/1000).toFixed(1)}K</td>
+      <td class="mono">${c.ws}</td>
+      <td class="mono">${c.api}</td>
+      <td><span class="pill ${c.up?'p-green':'p-red'}">${c.wow}</span></td>
+      <td style="text-align:right">${spk}</td>
+      <td><span class="pill p-blue">Active</span></td>
+    </tr>`);
+});
+
+const EVT = [
+  {kind:'DEPLOY',ico:'↑',bg:'var(--a-dim)',col:'var(--accent)',
+   tpls:[w=>`<b>${w}</b> deployed to production — v${ri(2,3)}.${ri(10,99)}.${ri(0,9)}`,
+         w=>`<b>${w}</b> rollout complete — ${ri(3,14)} services updated`]},
+  {kind:'API',   ico:'⚡',bg:'var(--am-dim)',col:'var(--amber)',
+   tpls:[w=>`<b>${w}</b> exceeded rate limit — ${ri(12,60)}K req/min`,
+         w=>`<b>${w}</b> burst cap hit, queue depth ${ri(200,1200)}`]},
+  {kind:'SIGNUP',ico:'✦',bg:'var(--g-dim)',col:'var(--green)',
+   tpls:[w=>`New workspace created — <b>${w}</b>`,
+         w=>`<b>${w}</b> completed onboarding flow`]},
+  {kind:'ERROR', ico:'✕',bg:'var(--r-dim)',col:'var(--red)',
+   tpls:[w=>`<b>${w}</b> reported 5xx spike — ${ri(18,85)} err/min`,
+         w=>`Build failed — <b>${w}</b> pipeline #${ri(100,999)}`]},
+  {kind:'SCALE', ico:'◎',bg:'var(--v-dim)',col:'var(--violet)',
+   tpls:[w=>`<b>${w}</b> crossed ${ri(1,9)}M API calls this month`,
+         w=>`<b>${w}</b> added ${ri(2,8)} new team members`]},
+];
+const WS_NAMES=['axiom-prod','northforge-main','cascade-api','helix-core','vektor-io','meridian-ml','pulsar-dev','obsidian-tx','nova-platform','drift-analytics','echo-services','relay-infra'];
+const feedEl=document.getElementById('feed-list');
+
+function ago(ms){
+  if(ms<60000) return `${Math.round(ms/1000)}s ago`;
+  if(ms<3600000) return `${Math.round(ms/60000)}m ago`;
+  return `${Math.round(ms/3600000)}h ago`;
+}
+function pushEvent(prepend=true){
+  const e=EVT[Math.floor(Math.random()*EVT.length)];
+  const ws=WS_NAMES[Math.floor(Math.random()*WS_NAMES.length)];
+  const tpl=e.tpls[Math.floor(Math.random()*e.tpls.length)];
+  const el=document.createElement('div');
+  el.className='feed-item'; el.dataset.ts=Date.now();
+  el.innerHTML=`<div class="feed-ico" style="background:${e.bg};color:${e.col}">${e.ico}</div>
+    <div class="feed-body">
+      <div class="feed-text">${tpl(ws)}</div>
+      <div class="feed-meta">${e.kind} · just now</div>
+    </div>`;
+  if(prepend&&feedEl.firstChild) feedEl.insertBefore(el,feedEl.firstChild);
+  else feedEl.appendChild(el);
+  while(feedEl.children.length>18) feedEl.removeChild(feedEl.lastChild);
+}
+for(let i=0;i<10;i++) pushEvent(false);
+feedEl.querySelectorAll('.feed-item').forEach((el,i)=>{
+  el.dataset.ts=Date.now()-(9-i)*(20000+Math.floor(Math.random()*70000));
+});
+function updateTimes(){
+  feedEl.querySelectorAll('.feed-item').forEach(el=>{
+    const meta=el.querySelector('.feed-meta');
+    if(!meta) return;
+    const kind=meta.textContent.split(' · ')[0];
+    meta.textContent=`${kind} · ${ago(Date.now()-+el.dataset.ts)}`;
+  });
+}
+setInterval(()=>{ pushEvent(true); updateTimes(); }, 2800);
+setInterval(updateTimes, 15000);
+</script>
+</body>
+</html>

@@ -1,0 +1,169 @@
+{
+  "project_title": "AI-Powered Interview Preparation System",
+  "team_members": [
+    { "name": "Sangram Parit",       "roll_no": "29" },
+    { "name": "Sairaj Jadhav",       "roll_no": "30" },
+    { "name": "Abhishek Kendale",    "roll_no": "58" },
+    { "name": "Omkar Jadhav",        "roll_no": "74" },
+    { "name": "Harshvardhan Korane", "roll_no": "80" }
+  ],
+  "guide": {
+    "name": "Prof. Nitin Magdum",
+    "designation": "Assistant Professor",
+    "department": "Computer Science and Engineering (Data Science)"
+  },
+  "branch": "COMPUTER SCIENCE AND ENGINEERING (DATA SCIENCE)",
+  "branch_short": "DS",
+  "academic_year": "2025-26",
+  "place": "Kolhapur",
+  "logo_path": "C:\\Users\\nonst\\.claude\\skills\\blackbook-generator\\assets\\kit_logo.png",
+  "dfd_image_path": "C:\\Users\\nonst\\Downloads\\project\\project\\output\\dfd.png",
+
+  "chapters": {
+    "ch1_introduction": "Job interviews are one of the most stressful steps in a student's transition from college to industry. Most of us have walked into a campus drive with very little idea of what would actually be asked, how confidently we would answer, or what the panel was secretly judging. This project began from that exact discomfort. We wanted a tool that behaves like a patient interviewer who never gets tired, reads your resume before the conversation, and tells you afterwards what you did well and where you stumbled.\n\nThe AI-Powered Interview Preparation System is a Flask web application that takes a candidate's PDF resume, extracts the actual skills written on it, and uses Google's Gemini 2.5 Flash model to generate questions that fit those skills and the candidate's seniority. The interview itself is voice-first — the question is read aloud through text-to-speech, the candidate answers by speaking into the microphone, and the audio stream is transcribed live by AssemblyAI's v3 Universal-Streaming service. After every answer, the system grades the response on three independent dimensions: confidence, technical correctness, and communication. At the end of the round, a second evaluation pass produces a complete report card with a hire recommendation and an improvement plan.\n\nThe goal was never to replace a real interview. It was to give students a private, repeatable, low-judgement environment where they could rehearse, hear themselves out loud, and see honest feedback on the same screen.",
+
+    "ch1_motivation": "We picked this problem because we lived it. Between the five of us we had sat through enough mock rounds, online tests, and pre-placement talks to know how uneven preparation usually is. Some friends spent weeks on Leetcode but froze the moment an HR asked \"tell me about yourself.\" Others were fluent talkers but could not explain a project they had actually built. Existing prep platforms tend to focus on either coding puzzles or generic question banks; very few take the candidate's own resume seriously and then push back on what is written there.\n\nThe second motivation was technical. We wanted to build something that pulled together the parts of computer science we had been learning separately — natural language processing for resume parsing, large-language-model prompting for question generation, real-time audio streaming for transcription, and database design for persistence. A mock-interview platform let us put all of those into one product where each piece had a visible job to do.",
+
+    "ch1_summary": "This chapter framed the gap the project tries to close, our personal motivation behind it, and the broad shape of the system. The remaining chapters go deeper into the problem statement, design, implementation, and the results we observed.",
+
+    "ch1_org_ch1": "Introduces the project, the motivation behind it, and the structure of this report.",
+    "ch1_org_ch2": "States the problem formally, surveys related work in interview-prep and AI-assisted assessment tools, and lists the objectives the system is built to satisfy.",
+    "ch1_org_ch3": "Presents the system architecture, the chosen software development model, and the design diagrams (DFD, activity, sequence, use case).",
+    "ch1_org_ch4": "Describes the implementation in detail — hardware, software, libraries, the development workflow, and the experiments performed.",
+    "ch1_org_ch5": "Reports the results obtained from running the system end-to-end and analyses what the numbers suggest.",
+    "ch1_org_ch6": "Concludes the report and outlines future enhancements that we did not have time to implement.",
+    "ch1_org_ch7": "Lists papers and presentations associated with this work, along with the project's overall progress.",
+    "ch1_org_ch8": "References cited throughout the report, formatted in IEEE style.",
+
+    "ch2_intro_para": "This chapter formally defines the problem the system addresses and surveys the existing landscape of automated interview-preparation tools. The aim is to identify clear gaps in current solutions and translate them into a concrete set of objectives that drive the design choices in later chapters.",
+
+    "ch2_lit_survey_intro": "Several commercial and academic efforts have been made in the area of automated interviewing and candidate assessment. Table 2.1 summarises a representative subset, the objective of each, and the limitation that motivated this project. The entries below are placeholders that the team will replace with the final references collected during the literature review.",
+
+    "ch2_lit_table": [
+      { "ref": "[1]", "objective": "Adaptive question generation using LLMs for technical interviews.", "limitation": "Does not personalise questions from the candidate's actual resume; assumes a fixed role." },
+      { "ref": "[2]", "objective": "Real-time speech-to-text for live coaching applications.", "limitation": "Standalone STT only — no scoring layer or interview workflow." },
+      { "ref": "[3]", "objective": "Resume parsing and skill extraction using NLP.", "limitation": "Outputs a static skill list; no downstream use in conversational assessment." },
+      { "ref": "[4]", "objective": "Automated scoring of spoken English responses.", "limitation": "Communication-only scoring; no technical-correctness signal." },
+      { "ref": "[5]", "objective": "Mock-interview platforms with pre-recorded question banks.", "limitation": "Static questions; no adaptation to the candidate or to the previous answer." }
+    ],
+
+    "ch2_research_gaps": [
+      "Existing tools rarely personalise questions to the candidate's own resume; they default to generic banks.",
+      "Voice-driven interaction is missing from most prep platforms — candidates type answers, which does not mirror a real interview.",
+      "Scoring is usually one-dimensional (correct / wrong) rather than separating confidence, technical depth, and communication.",
+      "Few systems use the candidate's previous answer to influence the next question, losing the adaptive quality of a real interviewer.",
+      "Result history and longitudinal progress tracking are typically absent or hidden behind a paywall."
+    ],
+
+    "ch2_need_of_work": "Final-year students from tier-2 and tier-3 colleges often do not have access to repeated mock interviews with experienced panellists. The few platforms that do exist are either expensive, English-only, or limited to typed answers. A free, voice-first, resume-aware system would directly help students rehearse at their own pace, hear themselves under pressure, and walk into real interviews better calibrated. The system also provides a base on which colleges and training cells can build internal placement-prep workflows without licensing third-party software.",
+
+    "ch2_problem_statement": "To design and implement a voice-driven, resume-aware mock-interview system that generates personalised questions using a large language model, transcribes spoken answers in real time, and grades them across confidence, technical correctness, and communication so that candidates receive specific, actionable feedback after every session.",
+
+    "ch2_objectives": [
+      "Parse a candidate's PDF resume and extract a weighted list of skills and seniority cues.",
+      "Generate five distinct types of personalised questions (concept, practical, problem-solving, behavioural, curiosity) using Gemini 2.5 Flash, with a heuristic fallback when the API is unavailable.",
+      "Stream microphone audio from the browser to AssemblyAI in real time and merge the transcript with any typed text.",
+      "Score every answer on three independent dimensions and produce a final aggregate verdict per session.",
+      "Persist every interview run in MongoDB and surface profile, history, and detailed evaluation through a JSON API."
+    ],
+
+    "ch2_summary": "The problem space, the existing gaps, and the objectives have now been stated formally. The next chapter translates these objectives into a concrete architecture and a set of design diagrams.",
+
+    "ch3_intro_para": "This chapter explains how the system is put together. It walks through the high-level architecture, the development model we followed, the key UML-style diagrams, and the data the system handles. Where a figure is required, a placeholder has been left in the report — the actual diagram is to be inserted by the team.",
+
+    "ch3_arch_desc": "The application is structured as a Flask MVC-lite web app that wires together three external AI services: Google Gemini for language tasks, AssemblyAI for real-time speech-to-text, and VAPI for batch text-to-speech and file-based STT. The frontend is a set of Jinja2 templates with vanilla JavaScript modules — `interview.js` drives the question-and-answer loop, `transcription.js` manages the AssemblyAI WebSocket, and `resume.js` handles the upload form. On the server side, blueprints under `app/routes/` separate concerns: `auth.py` for accounts, `resume.py` for upload and parsing, `interview.py` for question delivery and answer evaluation, `transcription.py` for minting the short-lived AssemblyAI token, and `results_api.py` plus `profile_api.py` for the JSON surfaces.\n\nBusiness logic lives in `app/services/`. `resume_parser.py` extracts text from PDFs using PyMuPDF and runs a section-weighted skill scorer over the result. `gemini_service.py` wraps every Gemini call with a timeout helper and falls back to template-driven question generation when no API key is set. `transcription_service.py` mints a 55-second AssemblyAI token so the browser can connect directly to the streaming endpoint without exposing the master key. MongoDB sits behind a single shared client in `app/extensions.py`; collections include `users`, `resumes`, and `interview_runs`, with indexes created on first request.",
+
+    "ch3_design_model": "Spiral Model — Risk-Driven Iterations.\n\nThe project did not lend itself to a strict waterfall plan because so much of it depended on third-party APIs whose behaviour we discovered only by integrating them. We therefore followed a spiral model with four short iterations.\n\nIteration 1 — Determination of objectives. We listed the must-have features (resume parsing, question generation, voice transcription, scoring, persistence) and accepted that VAPI TTS, AssemblyAI streaming, and Gemini quota would be the largest unknowns.\n\nIteration 2 — Risk analysis. We prototyped each external integration in isolation. The Gemini quota turned out to be the biggest risk — the free tier of the 2.0 model often returned 429s, which is why the production code falls through a candidate list (`gemini-2.5-flash` → `gemini-2.5-flash-lite` → `gemini-2.0-flash` → `gemini-2.0-flash-lite`).\n\nIteration 3 — Engineering. With the risks understood we built the full pipeline: upload → parse → question gen → interview UI → live transcription → per-question scoring → final evaluation. Each piece was wired with a graceful fallback so that a missing key never crashes a request.\n\nIteration 4 — Evaluation and planning. We tested the system end-to-end with our own resumes, fixed scoring edge cases (very short answers, empty answers), and added the result history page. The next spiral turn is essentially the future-scope list in Chapter 6.",
+
+    "ch3_diagrams_intro": "The following diagrams describe the system from four complementary viewpoints. Mermaid source for each diagram is provided separately so that the team can render and paste the figure into the placeholder positions below.",
+
+    "ch3_dfd_desc": "Figure 3.1 (Data Flow Diagram) shows how data moves through the system. A registered user uploads a PDF resume; the resume parser produces a skill profile that flows into the Gemini service, which emits a question batch; each question is sent to the browser, which streams microphone audio to AssemblyAI and posts the resulting transcript back to `/api/evaluate`; per-question scores accumulate in the Flask session and are written to `interview_runs` on the final question.",
+
+    "ch3_activity_desc": "Figure 3.2 (Activity Diagram) captures the runtime flow of a single interview round. After login the user uploads a resume, waits for the question batch, then enters a loop: TTS plays the question, the microphone streams audio, the user finishes speaking, the typed answer (if any) is merged with the transcript, the answer is evaluated, and the next question is fetched. After the last question, the full evaluation runs and the result page is shown.",
+
+    "ch3_sequence_desc": "Figure 3.3 (Sequence Diagram) details the browser-server-AI interactions for one question. The browser requests a token from `/api/transcription/token`, opens a WebSocket to AssemblyAI, streams PCM16 frames, calls `/api/tts` for the question audio, and finally POSTs `{question, answer, typed_answer, questionNumber}` to `/api/evaluate`. The Flask backend forwards the answer to Gemini, parses the JSON response, and returns the per-dimension scores.",
+
+    "ch3_usecase_desc": "Figure 3.4 (Use Case Diagram) lists the three actors — Candidate, System, and Gemini/AssemblyAI/VAPI as external services — and the use cases they participate in: register, log in, upload resume, take interview, view results, view history. The candidate is the only human actor; the AI services are used by the system on the candidate's behalf.",
+
+    "ch3_dataset_desc": "There is no fixed training dataset because the system does not train any model itself. Instead, two runtime datasets matter. The first is the candidate's resume — a PDF capped at 5 MB and 10 pages, parsed into raw text with PyMuPDF and scored against a curated list of 80+ skills with alias mappings. The second is the prompt-and-completion stream exchanged with Gemini at runtime. We also rely on a small in-memory bank of fallback question templates, organised by question type, so that the interview can run when Gemini is unavailable.",
+
+    "ch3_summary": "The architecture, the spiral development model that produced it, and the four standard diagrams have been described. The next chapter looks at the implementation details — the actual hardware, software, libraries, and experiments.",
+
+    "ch4_dev_tools_intro": "This section covers the tools, environment, and libraries used to build and run the system, followed by a walkthrough of how development progressed and the experimentation we performed.",
+
+    "ch4_hardware": "Development laptops with at least 8 GB RAM and a multi-core CPU were sufficient for everyday work. None of the heavy AI workloads run locally — Gemini, AssemblyAI, and VAPI all execute on their providers' infrastructure — so a discrete GPU was not required.\n\nA functioning microphone and the browser's microphone permission are mandatory at runtime, since the interview is voice-first.\n\nThe production deployment target is any Linux host that can run Gunicorn and reach MongoDB Atlas; we tested the image on an Ubuntu 22.04 virtual machine.",
+
+    "ch4_software": "Operating systems used during development: Windows 11 and macOS. The application itself is OS-agnostic.\n\nPython 3.10 or higher is required for the backend.\n\nMongoDB is the data store. A local instance works for development; a managed Atlas cluster is the intended production target.\n\nA modern Chromium-based or Firefox browser is required on the client side because the AssemblyAI streaming integration uses the WebAudio and WebSocket APIs.\n\nGit is used for source control and the project follows conventional-commit style prefixes (`feat:`, `fix:`, `refactor:`).",
+
+    "ch4_libraries": "Backend Python packages, taken directly from `requirements.txt`: Flask 2.x as the web framework, Flask-Login for session-based authentication, PyMongo for MongoDB access, bcrypt for password hashing, python-dotenv for environment loading, PyMuPDF (fitz) for PDF text extraction, google-generativeai for the Gemini client, assemblyai for the AssemblyAI Python SDK, requests for HTTP calls to VAPI, and gunicorn for production WSGI serving.\n\nFrontend libraries are loaded via CDN: Tailwind CSS for layout, Chart.js for the score charts on the results page, and Font Awesome for icons. There is no build step — the JavaScript is served as plain ES modules.",
+
+    "ch4_dev_details": "Development began with the auth and database scaffolding. Once register, login, and the shared MongoDB client were in place, the resume upload route was added and the section-weighted skill scorer was iterated on until it produced reasonable results across our own resumes.\n\nThe Gemini integration came next. We wrote `gemini_service.py` so that `generate_questions()` always returns a list of five questions, regardless of whether the API responded — the heuristic fallback uses a template bank in `_QUESTION_TEMPLATES_BY_TYPE` and substitutes the candidate's actual skills. This single design choice — \"never crash on a missing key\" — saved a lot of time when our quota ran out during demos.\n\nThe interview UI was built in three layers. The HTML and Jinja templates render the question card and the controls. `interview.js` orchestrates the round, calls `/api/tts` to play the question, mounts the AssemblyAI socket through `transcription.js`, and POSTs to `/api/evaluate` after each answer. A separate Whisper-in-browser fallback (`whisper_transcription.js`) is loaded on demand if AssemblyAI is unreachable.\n\nThe scoring layer was tightened last. The `/api/evaluate` route maps Gemini's three 0–100 scores to a 1–10 overall score using empirical thresholds (average ≥ 75 floors at 8.0, average 45–74 floors at 5.0, ≤ 2 words ⇒ 2.0, empty ⇒ 1.0). After the last question, `compute_final_scores()` computes a weighted aggregate (technical 0.5, confidence 0.25, communication 0.25) and emits one of `strong_yes`, `yes`, `maybe`, `no`.\n\nDeployment uses Gunicorn behind a reverse proxy. Indexes on `users.email`, `resumes.user_email`, and `interview_runs(user_email, created_at)` are created on first request rather than via a separate migration step, which keeps the operational footprint small.",
+
+    "ch4_experimentation": "Three categories of experiment shaped the final system.\n\nResume parsing. We ran the parser over a set of resumes from our own batch, varying section headings and bullet styles. Early versions over-counted ambiguous tokens like `c`, `r`, and `go`; the fix was to suppress those unless they appear inside a named section. Section weights (3× for the Skills section, 1.5× for Experience and Projects, 1× elsewhere) plus context-pattern bonuses for phrases such as \"built with X\" produced the most stable rankings.\n\nQuestion generation. We compared Gemini's output against the heuristic fallback. The heuristic templates produce serviceable questions, but Gemini's questions feel more natural and adapt to seniority cues (intern vs. fresher vs. experienced). Latency per call sat in the 2–4 second range, which is acceptable as a one-time cost at the start of a session.\n\nVoice transcription. We tested AssemblyAI v3 streaming against the browser's built-in WebSpeech API and against a Whisper-tiny fallback compiled to WebAssembly. AssemblyAI was clearly more accurate for technical vocabulary (e.g. it correctly transcribed \"AssemblyAI\", \"PyMuPDF\", \"Flask-Login\"), so it became the default path. The tools/ directory contains a small `test_transcription.py` script that runs a TTS-then-STT round trip and asserts a 70 % word-match floor.",
+
+    "ch4_summary": "The implementation rests on a small set of well-defined services, each with a fallback. The next chapter looks at what came out of running the whole pipeline end-to-end.",
+
+    "ch5_intro": "This chapter reports the results obtained while testing the system on real resumes and discusses what those results suggest about the design.",
+
+    "ch5_analysis": "We evaluated the system on resumes from members of our own batch — a small but representative sample of final-year computer-science and data-science students. For each resume the parser produced an ordered skill list which we cross-checked manually; the top five skills matched our expectations in the large majority of cases, and the small number of misses were driven by unusual section headings rather than by the scorer itself.\n\nQuestion generation produced five questions in roughly two to four seconds when Gemini was reachable. The questions referenced concrete skills from the resume — for example, a candidate listing Flask and MongoDB received a practical question about route blueprints and a problem-solving question about index design — which is the personalisation we set out to deliver. When the API was unavailable, the heuristic fallback still produced usable questions; they were less natural but stayed on topic because they were templated against the same skill list.\n\nLive transcription was the most operationally satisfying piece. AssemblyAI's v3 streaming stayed under one second of perceived lag in normal network conditions, and the merged transcript-plus-typed answer pipeline meant that students who spoke too softly could top up their answer with a typed supplement without losing the voice content.\n\nThe per-question scoring landed in sensible bands. Empty or near-empty answers were correctly floored at 1.0–2.0; confident, on-topic answers from members of the team consistently scored 7.5–9.0 on the overall scale. The final aggregate matched our subjective sense of the round in every test.",
+
+    "ch5_observation": "Three observations stood out. First, the graceful-fallback design earned its keep — every demo session encountered at least one transient API issue, and the app stayed usable each time. Second, students who saw their first scoring report tended to pay more attention to the communication score than to the technical one; they had expected to be judged on correctness and were surprised at how much clarity mattered. Third, the resume-aware questions produced a noticeable shift in answer quality compared to a generic question bank: candidates were more willing to engage when the question referenced something they had actually written.",
+
+    "ch5_summary": "The system worked end-to-end on real resumes, the scoring landed where it should, and the fallbacks proved their value in practice. The next chapter steps back and concludes the report.",
+
+    "ch6_conclusion": "We set out to build a voice-driven, resume-aware mock-interview platform with honest scoring and a complete result trail. What we shipped is recognisably that: a Flask application that takes a PDF, asks five Gemini-generated questions out loud, listens to the answers in real time, scores them across three dimensions, and stores the run. Along the way we learned more than we expected about the operational realities of LLM APIs, the small details that separate a usable voice UI from an annoying one, and the discipline of writing every external call with a fallback in mind.\n\nMore than the feature list, the project was a useful exercise in stitching unfamiliar pieces together. None of us had built a streaming WebSocket integration before this, and none of us had written Gemini prompts at this scale. By the end, each member of the team had owned at least one external integration end-to-end.",
+
+    "ch6_future_scope": "Several extensions are obvious next steps that we did not have time to ship.\n\nLanguage support. The current system is English-only. AssemblyAI supports more languages and Gemini handles multilingual prompts comfortably; adding Hindi and Marathi would broaden access for students from the region.\n\nRubric customisation. Right now the scoring weights (technical 0.5, confidence 0.25, communication 0.25) are fixed. Allowing colleges to define their own rubrics — for example, weighting communication higher in a mass-recruitment context — would make the platform more useful institutionally.\n\nLonger sessions and follow-up depth. The current round has five questions. Real interviews often go fifteen to twenty deep with branching follow-ups; supporting a longer session with deeper adaptive follow-ups is a natural extension of the existing question-regeneration logic.\n\nProctoring signals. For colleges using the system as part of a placement-prep programme, light proctoring (face-presence detection, tab-switch counts) would add value without turning the experience adversarial.\n\nFine-tuned scoring. The current scoring uses Gemini's general-purpose judgement. A lightweight evaluation model fine-tuned on annotated interview transcripts would produce more consistent scores across runs and across candidates.",
+
+    "ch7_papers": "A research paper drawn from this work has been drafted and is included alongside this report (`Reasearch_Paper.pdf` / `Reasearch_Paper.tex` in the project root). The paper documents the architecture, the scoring methodology, and the empirical observations recorded during testing. At the time of writing this Black Book the paper has not yet been submitted to a venue; the team intends to submit it to a national-level student conference during the academic year.",
+
+    "ch7_progress": "The system is functionally complete: resume parsing, question generation, real-time transcription, per-question scoring, full-interview evaluation, and result persistence are all implemented and have been demonstrated end-to-end. Source code is maintained under git on a `dev` branch with conventional-commit history. Remaining work for the academic submission is concentrated on documentation polish, the literature-survey section of this report, and the diagrams that accompany Chapter 3.",
+
+    "ch8_references": [
+      "[1] Placeholder — replace with actual reference. R. Sharma et al., \"LLM-driven adaptive interview question generation,\" Journal of Educational Technology, vol. X, pp. Y-Z, 2024.",
+      "[2] Placeholder — replace with actual reference. A. Gupta and S. Rao, \"Real-time speech-to-text for live coaching applications,\" Proceedings of Interspeech, 2023.",
+      "[3] Placeholder — replace with actual reference. M. Patel, \"NLP-based resume parsing and skill extraction,\" International Journal of Computer Applications, 2022.",
+      "[4] Placeholder — replace with actual reference. K. Iyer et al., \"Automated scoring of spoken English responses,\" IEEE Transactions on Learning Technologies, 2023.",
+      "[5] Google, \"Gemini API documentation,\" 2024. [Online]. Available: https://ai.google.dev/ ",
+      "[6] AssemblyAI, \"Universal-Streaming v3 documentation,\" 2024. [Online]. Available: https://www.assemblyai.com/docs/ ",
+      "[7] Flask Project, \"Flask documentation (2.x),\" 2024. [Online]. Available: https://flask.palletsprojects.com/ ",
+      "[8] MongoDB Inc., \"MongoDB manual,\" 2024. [Online]. Available: https://www.mongodb.com/docs/ ",
+      "[9] Artifex Software, \"PyMuPDF documentation,\" 2024. [Online]. Available: https://pymupdf.readthedocs.io/ ",
+      "[10] OWASP Foundation, \"OWASP Top 10,\" 2021. [Online]. Available: https://owasp.org/Top10/"
+    ]
+  },
+
+  "abbreviations": [
+    { "abbr": "AI",      "full": "Artificial Intelligence" },
+    { "abbr": "API",     "full": "Application Programming Interface" },
+    { "abbr": "DFD",     "full": "Data Flow Diagram" },
+    { "abbr": "HTML",    "full": "HyperText Markup Language" },
+    { "abbr": "HTTP",    "full": "HyperText Transfer Protocol" },
+    { "abbr": "JSON",    "full": "JavaScript Object Notation" },
+    { "abbr": "LLM",     "full": "Large Language Model" },
+    { "abbr": "MVC",     "full": "Model-View-Controller" },
+    { "abbr": "NLP",     "full": "Natural Language Processing" },
+    { "abbr": "PCM",     "full": "Pulse Code Modulation" },
+    { "abbr": "PDF",     "full": "Portable Document Format" },
+    { "abbr": "REST",    "full": "Representational State Transfer" },
+    { "abbr": "STT",     "full": "Speech to Text" },
+    { "abbr": "TTS",     "full": "Text to Speech" },
+    { "abbr": "UI",      "full": "User Interface" },
+    { "abbr": "URL",     "full": "Uniform Resource Locator" },
+    { "abbr": "WSGI",    "full": "Web Server Gateway Interface" },
+    { "abbr": "WS",      "full": "WebSocket" }
+  ],
+
+  "figures": [
+    { "name": "Fig. 3.1 Data Flow Diagram",      "page": "" },
+    { "name": "Fig. 3.2 Activity Diagram",       "page": "" },
+    { "name": "Fig. 3.3 Sequence Diagram",       "page": "" },
+    { "name": "Fig. 3.4 Use Case Diagram",       "page": "" },
+    { "name": "Fig. 5.1 Sample Score Breakdown", "page": "" }
+  ],
+
+  "tables": [
+    { "name": "Table 2.1 Literature Survey Summary", "page": "" },
+    { "name": "Table 4.1 Libraries and Frameworks Used", "page": "" }
+  ]
+}

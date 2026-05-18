@@ -1,0 +1,61 @@
+flowchart TD
+    %% External Entities
+    C[/Candidate/]
+    G[/Google Gemini API/]
+    A[/AssemblyAI\nStreaming WS/]
+    V[/VAPI TTS/]
+
+    %% Data Stores
+    D1[(D1: users\ncollection)]
+    D2[(D2: interview_runs\ncollection)]
+    D3[(D3: Flask\nSession)]
+
+    %% Processes
+    P1((1.0\nAuthenticate\nUser))
+    P2((2.0\nParse Resume\n& Extract Skills))
+    P3((3.0\nGenerate\nQuestions))
+    P4((4.0\nDeliver Question\nvia TTS))
+    P5((5.0\nStream &\nTranscribe Audio))
+    P6((6.0\nEvaluate\nAnswer))
+    P7((7.0\nCompute Final\nScore & Report))
+
+    %% Auth flow
+    C -->|Register / Login credentials| P1
+    P1 <-->|Verify / Store user| D1
+    P1 -->|Authenticated session| C
+
+    %% Resume flow
+    C -->|PDF resume upload| P2
+    P2 -->|Weighted skill profile| D3
+    P2 -->|Skill profile| P3
+
+    %% Question generation
+    P3 <-->|Skill-aware prompt / Questions JSON| G
+    P3 -->|5 personalised questions| D3
+
+    %% Interview loop
+    D3 -->|Next question text| P4
+    P4 <-->|Text to Audio URL| V
+    P4 -->|Question audio| C
+
+    C -->|Microphone PCM16 stream| P5
+    P5 <-->|Audio frames / Live transcript| A
+    P5 -->|Transcript + typed answer| P6
+
+    %% Evaluation
+    P6 <-->|Answer + rubric prompt / Scores JSON| G
+    P6 -->|Per-question score| D3
+    D3 -->|Accumulated scores| P7
+
+    %% Final report
+    P7 -->|Final evaluation & hire verdict| D2
+    P7 -->|Results page data| C
+
+    %% Styling
+    style C fill:#dbeafe,stroke:#2563eb
+    style G fill:#fef9c3,stroke:#ca8a04
+    style A fill:#fef9c3,stroke:#ca8a04
+    style V fill:#fef9c3,stroke:#ca8a04
+    style D1 fill:#f0fdf4,stroke:#16a34a
+    style D2 fill:#f0fdf4,stroke:#16a34a
+    style D3 fill:#f0fdf4,stroke:#16a34a

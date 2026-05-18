@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mmdc --version)",
+      "Bash(fnm list *)",
+      "Bash(python *)"
+    ]
+  }
+}
